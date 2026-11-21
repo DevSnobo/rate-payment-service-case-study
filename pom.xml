@@ -11,20 +11,23 @@
 	<groupId>net.snobo</groupId>
 	<artifactId>rate-payment-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
-	<url/>
+	<name>rate-payment-service-case-study</name>
+	<description>Case study implementing a Spring Boot+Maven based rate payment service.</description>
+	<url>https://github.com/DevSnobo/rate-payment-service-case-study</url>
 	<licenses>
 		<license/>
 	</licenses>
 	<developers>
-		<developer/>
+		<developer>
+			<name>Robin Fritz</name>
+			<email>admin@snobo.net</email>
+		</developer>
 	</developers>
 	<scm>
-		<connection/>
-		<developerConnection/>
+		<connection>scm:git:https://github.com/DevSnobo/rate-payment-service-case-study.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com/DevSnobo/artifact-stores-gradle-plugin.git</developerConnection>
 		<tag/>
-		<url/>
+		<url>https://github.com/DevSnobo/rate-payment-service-case-study</url>
 	</scm>
 	<properties>
 		<java.version>21</java.version>
