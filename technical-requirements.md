@@ -1,0 +1,11 @@
+# Technical Requirements
+- Java 21+
+- Spring Boot
+- Maven
+- REST/JSON
+- H2/in-memory/file-based database
+- GitHub Actions workflows for CI
+- JUnit tests for each business case with at least one possible error scenario handled
+- SonarQube for static code analysis and test coverage - no dead warnings
+- clear separation of api and internal matters
+- documentation of assumptions and the implementation 
