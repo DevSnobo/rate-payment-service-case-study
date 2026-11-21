@@ -1,13 +1,13 @@
-package net.snobo.rate_payment_service;
+package net.snobo;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class RatePaymentServiceApplication {
+public class Application {
 
 	public static void main(String[] args) {
-		SpringApplication.run(RatePaymentServiceApplication.class, args);
+		SpringApplication.run(Application.class, args);
 	}
 
 }
