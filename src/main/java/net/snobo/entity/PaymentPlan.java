@@ -2,6 +2,7 @@ package net.snobo.entity;
 
 import java.util.List;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -23,8 +24,13 @@ public class PaymentPlan {
     private Double outstandingBalance;
     private Double amountPaid;
     private Status status;
-    @OneToMany(mappedBy = "paymentPlan")
+    @OneToMany(mappedBy = "paymentPlan", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Installment> installments;
+
+    public void addInstallment(Installment installment) {
+        this.installments.add(installment);
+        installment.setPaymentPlan(this);
+    }
 
     public Long getId() {
         return id;
