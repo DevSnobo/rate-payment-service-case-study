@@ -77,6 +77,7 @@ public class PaymentPlan {
 
         BigDecimal remaining = payment.getAmount();
         List<Installment> allocationOrder = installments.stream()
+                .filter(installment -> installment.outstandingAmount().signum() > 0)
                 .sorted(Comparator.comparing(Installment::getDueDate)
                         .thenComparingInt(Installment::getInstallmentNumber))
                 .toList();
@@ -86,9 +87,6 @@ public class PaymentPlan {
                 break;
             }
             BigDecimal outstanding = installment.outstandingAmount();
-            if (outstanding.signum() <= 0) {
-                continue;
-            }
             BigDecimal allocationAmount = remaining.min(outstanding);
             installment.applyAllocation(allocationAmount);
             payment.addAllocation(installment, allocationAmount);
