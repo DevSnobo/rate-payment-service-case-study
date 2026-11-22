@@ -27,3 +27,65 @@ This repo implements a case study of a Spring Boot rate payment service in Java 
   CRUD.
 - Deleting claims or plans is out of scope.
 - H2 in-memory is the demo database.
+
+## API
+
+### Claims
+
+- `POST /api/claims` — demo seed endpoint.
+- `GET /api/claims/{claimNumber}` — look up one claim.
+
+### Payment plans
+
+- `POST /api/claims/{claimNumber}/payment-plan` — create a plan.
+- `GET /api/claims/{claimNumber}/payment-plan` — read the plan.
+
+Create a plan either by number of installments:
+
+```json
+{
+  "installmentCount": 9,
+  "firstDueDate": "2026-12-01"
+}
+```
+
+or by the amount the debtor can pay each month:
+
+```json
+{
+  "installmentAmount": 80.00,
+  "firstDueDate": "2026-12-01"
+}
+```
+
+Rules:
+
+- Provide exactly one of `installmentCount` or `installmentAmount`.
+- `installmentCount` is between 1 and 120.
+- `installmentAmount` must be positive, at most two decimals, and must not
+  produce more than 120 installments.
+- `firstDueDate` is optional. The default is the first day of the next month.
+- Past due dates are rejected.
+- Due dates are monthly, calculated from the first due date.
+- The last installment receives the rounding remainder.
+- If `installmentAmount` is greater than the claim total, the plan has one
+  installment for the claim total.
+- One payment plan per claim. A second create request returns 409.
+- Creation returns `201 Created` with a `Location` header and the plan body.
+
+### Payment allocation
+
+Not implemented yet; planned for the payment slice:
+
+- Allocate payments to the oldest due date first, then by installment number.
+- Partial payments are allowed.
+- An overpayment is spread over future unpaid installments when they exist.
+- If no future installment remains, the excess is a credit/overpayment case handled
+  by the refund rule.
+
+## Potential features
+
+- A quote endpoint, for example
+  `POST /api/claims/{claimNumber}/payment-plan/quote`, could return the calculated
+  schedule without persisting it. This would let a debtor compare a count-based and
+  an amount-based offer before accepting one.
