@@ -137,6 +137,66 @@ class PaymentPlanFlowTest {
                 .andExpect(content().string(containsString("\"totalClaimAmount\":500.00")));
     }
 
+    @Test
+    void recordsPartialAndOverpaymentsAndReturnsCredit() throws Exception {
+        Claim claim = Claim.create(4714L, new BigDecimal("500.00"), "Grace Hopper",
+                LocalDate.of(2026, 1, 15));
+        PaymentPlan plan = claim.createPaymentPlan();
+        plan.addInstallment(Installment.create(1, new BigDecimal("100.00"), LocalDate.of(2026, 4, 1)));
+        plan.addInstallment(Installment.create(2, new BigDecimal("200.00"), LocalDate.of(2026, 5, 1)));
+        plan.addInstallment(Installment.create(3, new BigDecimal("200.00"), LocalDate.of(2026, 6, 1)));
+        plan.validateAgainstClaim();
+        claimRepository.saveAndFlush(claim);
+
+        mockMvc.perform(post("/api/claims/0000004714/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":80.00,"paidOn":"2026-03-14","reference":"first"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.payment.amount").value(80.00))
+                .andExpect(jsonPath("$.payment.allocatedAmount").value(80.00))
+                .andExpect(jsonPath("$.payment.unallocatedAmount").value(0.00))
+                .andExpect(jsonPath("$.payment.allocations.length()").value(1))
+                .andExpect(jsonPath("$.paymentPlan.amountPaid").value(80.00))
+                .andExpect(jsonPath("$.paymentPlan.outstandingBalance").value(420.00))
+                .andExpect(jsonPath("$.paymentPlan.creditAmount").value(0.00))
+                .andExpect(jsonPath("$.paymentPlan.status").value("ACTIVE"));
+
+        mockMvc.perform(post("/api/claims/0000004714/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":500.00,"paidOn":"2026-03-15","reference":"second"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.payment.amount").value(500.00))
+                .andExpect(jsonPath("$.payment.allocatedAmount").value(420.00))
+                .andExpect(jsonPath("$.payment.unallocatedAmount").value(80.00))
+                .andExpect(jsonPath("$.payment.allocations.length()").value(3))
+                .andExpect(jsonPath("$.payment.allocations[0].installmentNumber").value(1))
+                .andExpect(jsonPath("$.payment.allocations[0].amount").value(20.00))
+                .andExpect(jsonPath("$.payment.allocations[2].installmentNumber").value(3))
+                .andExpect(jsonPath("$.payment.allocations[2].amount").value(200.00))
+                .andExpect(jsonPath("$.paymentPlan.amountPaid").value(500.00))
+                .andExpect(jsonPath("$.paymentPlan.outstandingBalance").value(0.00))
+                .andExpect(jsonPath("$.paymentPlan.creditAmount").value(80.00))
+                .andExpect(jsonPath("$.paymentPlan.status").value("COMPLETED"));
+
+        mockMvc.perform(get("/api/claims/0000004714/payment-plan"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.creditAmount").value(80.00))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.installments[0].amountPaid").value(100.00))
+                .andExpect(jsonPath("$.installments[2].amountPaid").value(200.00));
+
+        mockMvc.perform(get("/api/claims/0000004714/payment-plan/payments"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].reference").value("first"))
+                .andExpect(jsonPath("$[1].reference").value("second"))
+                .andExpect(jsonPath("$[1].unallocatedAmount").value(80.00));
+    }
+
     private void seedPaymentPlan() {
         Claim claim = Claim.create(4711L, new BigDecimal("300.00"), "Ada Lovelace",
                 LocalDate.of(2026, 1, 1));

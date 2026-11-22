@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -31,14 +32,22 @@ import net.snobo.domain.Status;
 import net.snobo.rest.dto.ClaimResponse;
 import net.snobo.rest.dto.CreateClaimRequest;
 import net.snobo.rest.dto.CreatePaymentPlanRequest;
+import net.snobo.rest.dto.CreatePaymentRequest;
 import net.snobo.rest.dto.InstallmentResponse;
+import net.snobo.rest.dto.PaymentAllocationResponse;
 import net.snobo.rest.dto.PaymentPlanResponse;
+import net.snobo.rest.dto.PaymentResponse;
+import net.snobo.rest.dto.RecordPaymentResponse;
 import net.snobo.service.ClaimService;
 import net.snobo.service.PaymentPlanService;
+import net.snobo.service.PaymentService;
 import net.snobo.service.exception.ClaimNotFoundException;
 import net.snobo.service.exception.DuplicateClaimException;
+import net.snobo.service.exception.DuplicatePaymentReferenceException;
 import net.snobo.service.exception.InvalidClaimRequestException;
 import net.snobo.service.exception.InvalidPaymentPlanRequestException;
+import net.snobo.service.exception.InvalidPaymentRequestException;
+import net.snobo.service.exception.PaymentConflictException;
 import net.snobo.service.exception.PaymentPlanAlreadyExistsException;
 import net.snobo.service.exception.PaymentPlanNotFoundException;
 
@@ -56,6 +65,9 @@ class ClaimManagementControllerTest {
     @MockitoBean
     private PaymentPlanService paymentPlanService;
 
+    @MockitoBean
+    private PaymentService paymentService;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -66,6 +78,7 @@ class ClaimManagementControllerTest {
                 new BigDecimal("300.00"),
                 new BigDecimal("100.00"),
                 new BigDecimal("200.00"),
+                new BigDecimal("0.00"),
                 Status.ACTIVE,
                 List.of(
                         new InstallmentResponse(1, new BigDecimal("100.00"), new BigDecimal("100.00"),
@@ -344,6 +357,143 @@ class ClaimManagementControllerTest {
     }
 
     @Test
+    void recordsPayment() throws Exception {
+        given(paymentService.recordPayment(anyLong(), any(CreatePaymentRequest.class)))
+                .willReturn(recordPaymentResponse());
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":150.00,"paidOn":"2026-03-14","reference":"bank-1"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.payment.paymentId").value("payment-1"))
+                .andExpect(jsonPath("$.payment.amount").value(150.00))
+                .andExpect(jsonPath("$.payment.paidOn").value("2026-03-14"))
+                .andExpect(jsonPath("$.payment.reference").value("bank-1"))
+                .andExpect(jsonPath("$.payment.allocatedAmount").value(150.00))
+                .andExpect(jsonPath("$.payment.unallocatedAmount").value(0.00))
+                .andExpect(jsonPath("$.payment.allocations.length()").value(2))
+                .andExpect(jsonPath("$.payment.allocations[0].installmentNumber").value(1))
+                .andExpect(jsonPath("$.payment.allocations[0].amount").value(100.00))
+                .andExpect(jsonPath("$.payment.allocations[1].installmentNumber").value(2))
+                .andExpect(jsonPath("$.payment.allocations[1].amount").value(50.00))
+                .andExpect(jsonPath("$.paymentPlan.claimNumber").value("0000004711"))
+                .andExpect(jsonPath("$.paymentPlan.creditAmount").value(0.00));
+
+        ArgumentCaptor<CreatePaymentRequest> captor = ArgumentCaptor.forClass(CreatePaymentRequest.class);
+        verify(paymentService).recordPayment(eq(4711L), captor.capture());
+        assertThat(captor.getValue().amount()).isEqualByComparingTo("150.00");
+        assertThat(captor.getValue().paidOn()).isEqualTo(LocalDate.of(2026, 3, 14));
+        assertThat(captor.getValue().reference()).isEqualTo("bank-1");
+    }
+
+    @Test
+    void returnsPaymentHistory() throws Exception {
+        given(paymentService.getPayments(4711L)).willReturn(List.of(paymentResponse()));
+
+        mockMvc.perform(get("/api/claims/0000004711/payment-plan/payments"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].paymentId").value("payment-1"))
+                .andExpect(jsonPath("$[0].amount").value(150.00))
+                .andExpect(jsonPath("$[0].allocations.length()").value(2));
+
+        verify(paymentService).getPayments(4711L);
+    }
+
+    @Test
+    void returnsNotFoundWhenRecordingPaymentForUnknownClaim() throws Exception {
+        given(paymentService.recordPayment(anyLong(), any(CreatePaymentRequest.class)))
+                .willThrow(new ClaimNotFoundException(4711L));
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":10.00,\"paidOn\":\"2026-03-14\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Claim not found"));
+    }
+
+    @Test
+    void returnsNotFoundWhenRecordingPaymentWithoutPlan() throws Exception {
+        given(paymentService.recordPayment(anyLong(), any(CreatePaymentRequest.class)))
+                .willThrow(new PaymentPlanNotFoundException(4711L));
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":10.00,\"paidOn\":\"2026-03-14\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Payment plan not found"));
+    }
+
+    @Test
+    void returnsConflictForDuplicatePaymentReference() throws Exception {
+        given(paymentService.recordPayment(anyLong(), any(CreatePaymentRequest.class)))
+                .willThrow(new DuplicatePaymentReferenceException(4711L, "bank-1"));
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":10.00,\"paidOn\":\"2026-03-14\",\"reference\":\"bank-1\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Payment reference already exists"))
+                .andExpect(jsonPath("$.detail").value(
+                        "Payment reference 'bank-1' already exists for claim 0000004711"));
+    }
+
+    @Test
+    void returnsBadRequestForInvalidPayment() throws Exception {
+        given(paymentService.recordPayment(anyLong(), any(CreatePaymentRequest.class)))
+                .willThrow(new InvalidPaymentRequestException("paidOn must not be in the future"));
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":10.00,\"paidOn\":\"2026-03-20\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid payment request"))
+                .andExpect(jsonPath("$.detail").value("paidOn must not be in the future"));
+    }
+
+    @Test
+    void returnsConflictForPaymentConflict() throws Exception {
+        given(paymentService.recordPayment(anyLong(), any(CreatePaymentRequest.class)))
+                .willThrow(new PaymentConflictException("Payment could not be recorded due to a data conflict"));
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":10.00,\"paidOn\":\"2026-03-14\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Payment conflict"));
+    }
+
+    @Test
+    void returnsBadRequestForMalformedPaymentJson() throws Exception {
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Malformed request body"));
+    }
+
+    @Test
+    void returnsBadRequestForMalformedClaimNumberOnPayment() throws Exception {
+        mockMvc.perform(post("/api/claims/abc/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":10.00,\"paidOn\":\"2026-03-14\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(jsonPath("$.detail").value("claimNumber must be a valid number"));
+    }
+
+    @Test
+    void returnsNotFoundForPaymentHistoryWithoutPlan() throws Exception {
+        given(paymentService.getPayments(4711L)).willThrow(new PaymentPlanNotFoundException(4711L));
+
+        mockMvc.perform(get("/api/claims/0000004711/payment-plan/payments"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Payment plan not found"));
+    }
+
+    @Test
     void hidesUnexpectedErrorMessage() throws Exception {
         given(claimService.createClaim(any(CreateClaimRequest.class)))
                 .willThrow(new RuntimeException("secret"));
@@ -358,9 +508,24 @@ class ClaimManagementControllerTest {
                 .andExpect(content().string(not(containsString("secret"))));
     }
 
+    private static RecordPaymentResponse recordPaymentResponse() {
+        return new RecordPaymentResponse(paymentResponse(), paymentPlanResponse());
+    }
+
+    private static PaymentResponse paymentResponse() {
+        return new PaymentResponse("payment-1", new BigDecimal("150.00"),
+                LocalDate.of(2026, 3, 14), Instant.parse("2026-03-15T10:00:00Z"),
+                "bank-1", new BigDecimal("150.00"), new BigDecimal("0.00"),
+                List.of(
+                        new PaymentAllocationResponse(1, new BigDecimal("100.00"),
+                                LocalDate.of(2026, 4, 1)),
+                        new PaymentAllocationResponse(2, new BigDecimal("50.00"),
+                                LocalDate.of(2026, 5, 1))));
+    }
+
     private static PaymentPlanResponse paymentPlanResponse() {
         return new PaymentPlanResponse("0000004711", new BigDecimal("500.00"),
-                new BigDecimal("0.00"), new BigDecimal("500.00"), Status.ACTIVE,
+                new BigDecimal("0.00"), new BigDecimal("500.00"), new BigDecimal("0.00"), Status.ACTIVE,
                 List.of(
                         new InstallmentResponse(1, new BigDecimal("250.00"), new BigDecimal("0.00"),
                                 LocalDate.of(2026, 12, 1)),

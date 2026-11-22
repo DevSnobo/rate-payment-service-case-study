@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -21,8 +22,11 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import net.snobo.service.exception.ClaimNotFoundException;
 import net.snobo.service.exception.DuplicateClaimException;
+import net.snobo.service.exception.DuplicatePaymentReferenceException;
 import net.snobo.service.exception.InvalidClaimRequestException;
 import net.snobo.service.exception.InvalidPaymentPlanRequestException;
+import net.snobo.service.exception.InvalidPaymentRequestException;
+import net.snobo.service.exception.PaymentConflictException;
 import net.snobo.service.exception.PaymentPlanAlreadyExistsException;
 import net.snobo.service.exception.PaymentPlanNotFoundException;
 
@@ -80,6 +84,33 @@ public class ApiExceptionHandler {
                                                       HttpServletRequest request) {
         return problem(HttpStatus.BAD_REQUEST, "Malformed request body",
                 "Request body is missing or malformed", request);
+    }
+
+    @ExceptionHandler(InvalidPaymentRequestException.class)
+    public ProblemDetail handleInvalidPaymentRequest(InvalidPaymentRequestException exception,
+                                                     HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid payment request",
+                exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(DuplicatePaymentReferenceException.class)
+    public ProblemDetail handleDuplicatePaymentReference(DuplicatePaymentReferenceException exception,
+                                                         HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Payment reference already exists",
+                exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(PaymentConflictException.class)
+    public ProblemDetail handlePaymentConflict(PaymentConflictException exception,
+                                               HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Payment conflict", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ProblemDetail handlePessimisticLocking(PessimisticLockingFailureException exception,
+                                                  HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Payment conflict",
+                "Another payment is being recorded; please retry", request);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
