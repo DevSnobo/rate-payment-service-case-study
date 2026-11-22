@@ -2,45 +2,103 @@
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=DevSnobo_rate-payment-service-case-study&metric=coverage)](https://sonarcloud.io/summary/new_code?id=DevSnobo_rate-payment-service-case-study)
 
 # rate-payment-service-case-study
-This repo implements a case study of a Spring Boot rate payment service in Java with Maven as build tool.
 
-## Overview
-- technical requirements can be found in the [technical-requirements.md](technical-requirements.md) file.
-- project goals can be found in the [goals.md](goals.md) file.
-- business requirements can be found in the [business-requirements.md](business-requirements.md) file.
+A Spring Boot reference implementation of a small rate payment service. A real client uses it to
+turn a claim into one payment plan, allocate incoming payments to installments, settle unused
+credit with refunds, and read the current plan status.
 
-## Scenario
-- a claim can be displayed and an installment plan can be created
-- payments can be recorded and allocated to the open installments
-- overdue rates, partial payments and overpayments can be handled
+This repository is a job-interview case study. The rules are deliberate and tested, but the
+runtime is a demo runtime. The sections below describe how an integration uses the service and
+where the production boundaries are.
 
-## Assumptions
-- The claim is local to this service; there is no upstream claim system.
-- One payment plan per claim.
-- A claim number is a `Long`, positive and at most 10 digits. The API presents it as a
-  10-digit zero-padded string (`4711` → `"0000004711"`); storage stays numeric.
-- The claim owns the total amount. The plan's installments must sum to it.
-- Single currency for the case study; there is no currency field.
-- There is no customer/debtor aggregate and no claim-list endpoint. The service looks
-  up one claim by number.
-- Claims are seeded through a demo `POST /api/claims` endpoint; it is not full claim
-  CRUD.
-- Deleting claims or plans is out of scope.
-- H2 in-memory is the demo database.
+## What the service does
 
-## API
+- Seeds one claim for a demo or test.
+- Creates one payment plan for a claim, either by installment count or by monthly amount.
+- Allocates payments to installments, oldest due date first.
+- Keeps an append-only payment and allocation ledger.
+- Records partial payments, overpayments and unallocated credit.
+- Refunds credit from a payment without changing the installments.
+- Computes `ACTIVE`, `OVERDUE` or `COMPLETED` on every read.
+- Returns RFC 9457 `ProblemDetail` errors.
 
-### Claims
+## What it does not do
 
-- `POST /api/claims` — demo seed endpoint.
-- `GET /api/claims/{claimNumber}` — look up one claim.
+- No upstream claim system. The claim is local.
+- No claim list, claim update or claim deletion.
+- No customer or debtor aggregate.
+- No second plan for a claim and no plan history.
+- No quote or preview endpoint for comparing plan offers before accepting one.
+- No payment reversal or chargeback of allocated money.
+- No idempotent replay, no pagination and no multi-currency.
+- No authentication, authorisation or production database.
 
-### Payment plans
+## Quick start
 
-- `POST /api/claims/{claimNumber}/payment-plan` — create a plan.
-- `GET /api/claims/{claimNumber}/payment-plan` — read the plan.
+Requirements: Java 21. The Maven wrapper is included.
 
-Create a plan either by number of installments:
+```bash
+./mvnw spring-boot:run
+```
+
+The service starts on `http://localhost:8080`. It uses an H2 in-memory database, so every start
+begins with an empty schema. The demo credentials are `sa` / `password`.
+
+Run the tests and coverage report:
+
+```bash
+./mvnw -B -ntp clean verify -Pcoverage
+```
+
+## Integration walkthrough
+
+The examples use a `500.00` claim. Dates are fixed for readability. When you run them, use a
+`paidOn` or `refundedOn` that is today or in the past, and a `firstDueDate` that is today or in
+the future.
+
+### 1. Seed a claim
+
+```bash
+curl -i -X POST http://localhost:8080/api/claims \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "claimNumber": 4711,
+    "totalAmount": 500.00,
+    "debtorName": "Ada Lovelace",
+    "createdOn": "2026-11-21"
+  }'
+```
+
+The response is `201 Created`. The claim number is returned zero-padded:
+
+```json
+{
+  "claimNumber": "0000004711",
+  "totalAmount": 500.00,
+  "debtorName": "Ada Lovelace",
+  "createdOn": "2026-11-21"
+}
+```
+
+`POST /api/claims` is a demo seed endpoint. It is not full claim CRUD.
+
+### 2. Create the plan
+
+By monthly amount:
+
+```bash
+curl -i -X POST http://localhost:8080/api/claims/4711/payment-plan \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "installmentAmount": 80.00,
+    "firstDueDate": "2026-12-01"
+  }'
+```
+
+This creates six installments of `80.00` and one finishing installment of `20.00`. The response is
+`201 Created` with `Location: /api/claims/0000004711/payment-plan`.
+
+By count instead:
 
 ```json
 {
@@ -49,106 +107,280 @@ Create a plan either by number of installments:
 }
 ```
 
-or by the amount the debtor can pay each month:
+This creates eight installments of `55.55` and a last installment of `55.60`.
+
+The plan is created immediately. A second create for the same claim returns `409`.
+
+### 3. Read the plan
+
+```bash
+curl -s http://localhost:8080/api/claims/0000004711/payment-plan
+```
+
+The response contains the claim total, paid amount, outstanding balance, credit, refunded amount,
+computed status and ordered installments:
 
 ```json
 {
-  "installmentAmount": 80.00,
-  "firstDueDate": "2026-12-01"
+  "claimNumber": "0000004711",
+  "totalClaimAmount": 500.00,
+  "amountPaid": 0.00,
+  "outstandingBalance": 500.00,
+  "creditAmount": 0.00,
+  "refundedAmount": 0.00,
+  "status": "ACTIVE",
+  "installments": [
+    {"installmentNumber": 1, "scheduledAmount": 80.00, "amountPaid": 0.00, "dueDate": "2026-12-01"},
+    {"installmentNumber": 2, "scheduledAmount": 80.00, "amountPaid": 0.00, "dueDate": "2027-01-01"}
+  ]
 }
 ```
 
-Rules:
+The example is abridged. A real response contains every installment.
 
-- Provide exactly one of `installmentCount` or `installmentAmount`.
-- `installmentCount` is between 1 and 120.
-- `installmentAmount` must be positive, at most two decimals, and must not
-  produce more than 120 installments.
-- `firstDueDate` is optional. The default is the first day of the next month.
-- Past due dates are rejected.
-- Due dates are monthly, calculated from the first due date.
-- The last installment receives the rounding remainder.
-- If `installmentAmount` is greater than the claim total, the plan has one
-  installment for the claim total.
-- One payment plan per claim. A second create request returns 409.
-- Creation returns `201 Created` with a `Location` header and the plan body.
+### 4. Record a payment
 
-### Payments
+```bash
+curl -i -X POST http://localhost:8080/api/claims/4711/payment-plan/payments \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "amount": 550.00,
+    "paidOn": "2026-11-21",
+    "reference": "bank-transfer-123"
+  }'
+```
 
-- `POST /api/claims/{claimNumber}/payment-plan/payments` — record a payment.
-- `GET /api/claims/{claimNumber}/payment-plan/payments` — read the payment history.
-
-Request:
+The service allocates `500.00` across the installments, completes the plan and keeps `50.00` as
+unallocated credit:
 
 ```json
 {
-  "amount": 80.00,
-  "paidOn": "2026-12-05",
-  "reference": "bank-transfer-123"
+  "payment": {
+    "paymentId": "6c8c6d30-6d9b-4e5e-9f2b-3f4c5d6e7f80",
+    "amount": 550.00,
+    "allocatedAmount": 500.00,
+    "refundedAmount": 0.00,
+    "unallocatedAmount": 50.00,
+    "allocations": ["..."],
+    "refunds": []
+  },
+  "paymentPlan": {
+    "claimNumber": "0000004711",
+    "totalClaimAmount": 500.00,
+    "amountPaid": 500.00,
+    "outstandingBalance": 0.00,
+    "creditAmount": 50.00,
+    "refundedAmount": 0.00,
+    "status": "COMPLETED",
+    "installments": ["..."]
+  }
 }
 ```
 
-Rules:
+Copy the `paymentId` from the response for the refund step.
 
-- `amount` is positive and scale 2.
-- `paidOn` is required and must not be in the future.
-- `reference` is optional. It is unique per plan; a duplicate returns 409.
-- Payments are allocated to the oldest due date first, then by installment number.
+### 5. Refund part of the credit
+
+```bash
+PAYMENT_ID="6c8c6d30-6d9b-4e5e-9f2b-3f4c5d6e7f80"
+
+curl -i -X POST \
+  "http://localhost:8080/api/claims/4711/payment-plan/payments/${PAYMENT_ID}/refunds" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "amount": 20.00,
+    "refundedOn": "2026-11-21",
+    "reference": "refund-123"
+  }'
+```
+
+The plan stays `COMPLETED`. The installments do not change. The payment's refunded amount rises,
+its unallocated credit falls, and the plan's `creditAmount` falls by the same amount.
+
+### 6. Read the history
+
+```bash
+curl -s http://localhost:8080/api/claims/0000004711/payment-plan/payments
+curl -s http://localhost:8080/api/claims/0000004711/payment-plan/refunds
+```
+
+Payments are ordered by `paidOn`, then id. Refunds are ordered by `refundedOn`, then id.
+
+## API at a glance
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/claims` | Seed a claim. Demo and test use. |
+| `GET` | `/api/claims/{claimNumber}` | Read one claim. |
+| `GET` | `/api/claims/{claimNumber}/payment-plan` | Read the plan. |
+| `POST` | `/api/claims/{claimNumber}/payment-plan` | Create the plan. |
+| `POST` | `/api/claims/{claimNumber}/payment-plan/payments` | Record a payment. |
+| `GET` | `/api/claims/{claimNumber}/payment-plan/payments` | Read payment history. |
+| `POST` | `/api/claims/{claimNumber}/payment-plan/payments/{paymentId}/refunds` | Refund unallocated credit. |
+| `GET` | `/api/claims/{claimNumber}/payment-plan/refunds` | Read refund history. |
+
+The full request and response contract is in the [API reference](docs/api.md).
+
+## Rules that affect every integration
+
+### Claim numbers
+
+- The response always uses a 10-digit zero-padded string: `4711` becomes `"0000004711"`.
+- A request path accepts the padded or unpadded numeric form.
+- The seed body takes a JSON number.
+- A claim number must be positive and at most 10 digits. Anything else returns `400`.
+
+### Money
+
+- Money is a JSON number, normalized to two decimal places.
+- A value that would need rounding to two decimal places returns `400`. Input is never silently
+  rounded.
+- There is one currency. The case study has no currency field.
+- `amountPaid` means money allocated to installments. It does not include credit.
+
+### Dates and time
+
+- Business dates are `LocalDate`.
+- The business time zone is `Europe/Berlin`.
+- `paidOn` and `refundedOn` must not be in the future.
+- `firstDueDate` must not be in the past.
+- Due dates are monthly and calculated from the original first date.
+
+### One plan per claim
+
+A claim has zero or one plan. The plan is addressed through the claim, not through a plan id.
+A second create returns `409`.
+
+### Status
+
+| Condition | Status |
+| --- | --- |
+| Outstanding balance is zero | `COMPLETED` |
+| Any unpaid installment is past due | `OVERDUE` |
+| Otherwise | `ACTIVE` |
+
+`COMPLETED` wins. Due today is not overdue. Status is computed on every read, so it can change
+without a write.
+
+### Payments and credit
+
+- Allocation order is due date, then installment number.
 - Partial payments are allowed.
-- An overpayment is spread over future unpaid installments while any exist.
-- If no future installment remains, the excess is recorded as unallocated credit on
-  the payment and as `creditAmount` on the plan.
-- A payment on a completed plan is accepted and recorded as credit.
-- `amountPaid` is the amount allocated to installments.
-- `creditAmount` is the remaining unallocated credit after refunds.
-- `refundedAmount` is the amount already returned to the debtor.
-- `grossReceived = amountPaid + creditAmount + refundedAmount`.
-- `currentlyHeld = amountPaid + creditAmount`.
-- A payment response contains `paymentId`, `amount`, `paidOn`, `recordedAt`,
-  `reference`, `allocatedAmount`, `refundedAmount`, `unallocatedAmount`, the
-  allocation rows and the refunds.
-- Recording a payment returns `201 Created` with the payment and the updated plan.
-- Payment history is ordered by `paidOn`, then id.
-- Recording uses a pessimistic write lock per claim, so concurrent payments are
-  serialized and cannot over-allocate an installment.
+- One payment can span several installments.
+- Overpayment is spread over future unpaid installments.
+- Money left after all installments are paid becomes `creditAmount`.
+- A payment on a completed plan is accepted as credit.
 
 ### Refunds
 
-- `POST /api/claims/{claimNumber}/payment-plan/payments/{paymentId}/refunds` —
-  refund part or all of a payment's unallocated credit.
-- `GET /api/claims/{claimNumber}/payment-plan/refunds` — read the refund history.
+- A refund uses only the selected payment's unallocated credit.
+- A refund does not change installment paid amounts or the outstanding balance.
+- A refund does not reopen a completed plan.
+- Partial and multiple refunds are allowed until the credit is exhausted.
 
-Request:
+### References, retries and concurrency
+
+- A payment reference is unique per plan when present. A refund reference is unique per payment
+  when present.
+- A duplicate reference returns `409`.
+- There is no idempotency key. A retry with the same reference returns `409`, not the original
+  result. If a response is lost, read the current state before retrying.
+- Payment and refund recording locks the claim row. Concurrent requests for one claim serialise.
+- A lock conflict returns `409` with a retry message.
+
+### Error body
 
 ```json
 {
-  "amount": 20.00,
-  "refundedOn": "2026-03-20",
-  "reference": "refund-123"
+  "type": "about:blank",
+  "title": "Payment plan not found",
+  "status": 404,
+  "detail": "No payment plan for claim 0000004711",
+  "instance": "/api/claims/0000004711/payment-plan"
 }
 ```
 
-Rules:
+`400` means invalid input, `404` means an unknown claim, plan or payment, `409` means a
+conflict, and `500` is a generic unexpected error.
 
-- A refund can only use unallocated credit from the selected payment.
-- Partial refunds and several refunds per payment are allowed.
-- The amount must not exceed the payment's remaining `unallocatedAmount`.
-- A refund does not change installment paid amounts or the outstanding balance.
-- A refund does not reopen a completed plan.
-- `refundedOn` is required and must not be in the future.
-- `reference` is optional and unique per payment; a duplicate returns 409.
-- Refunding more than the available credit returns 409.
-- Recording uses the same pessimistic claim lock as payments, so concurrent refunds
-  cannot spend the same credit twice.
-- The response contains the refund, the updated payment and the updated plan.
+## Configuration
 
-## Potential features
+Main settings in `src/main/resources/application.properties`:
 
-- A quote endpoint, for example
-  `POST /api/claims/{claimNumber}/payment-plan/quote`, could return the calculated
-  schedule without persisting it. This would let a debtor compare a count-based and
-  an amount-based offer before accepting one.
-- Reversal or chargeback of an allocated payment. This is different from a credit
-  refund because it would reopen the plan.
-- Idempotent replay for a repeated payment or refund `reference`.
-- Pagination for payment and refund history.
+| Setting | Value |
+| --- | --- |
+| Database | `jdbc:h2:mem:testdb` |
+| Credentials | `sa` / `password` |
+| Schema | generated by Hibernate |
+| DDL failure | `hibernate.hbm2ddl.halt_on_error=true` |
+
+The test profile uses a unique H2 database per context, `create-drop`,
+`open-in-view=false` and the same DDL failure rule.
+
+A real deployment needs a persistent database, migrations, authentication and a claim source.
+Those are out of scope for the case study.
+
+## Repository layout
+
+```text
+src/main/java/net/snobo
+  config/       Clock bean
+  db/entity/    Claim, PaymentPlan, Installment, Payment, PaymentAllocation, Refund
+  db/repository Spring Data repositories
+  domain/       Money, ClaimNumbers, InstallmentSchedule, Status
+  rest/         Controller, error handler, request and response records
+  service/      Transactions, orchestration and service exceptions
+```
+
+## Documentation
+
+- [Documentation index](docs/README.md)
+- [Architecture](docs/architecture.md) — context, domain model, data model, transactions and assumptions.
+- [API reference](docs/api.md) — every endpoint, field and error case.
+- [Slice 01 — Foundation and read path](docs/slices/01-foundation-and-read-path.md)
+- [Slice 02 — Create payment plan](docs/slices/02-create-payment-plan.md)
+- [Slice 03 — Record payments](docs/slices/03-record-payments.md)
+- [Slice 04 — Refunds and credit settlement](docs/slices/04-refunds-and-credit.md)
+- [Slice 05 — Build, test and CI](docs/slices/00-build-test-and-ci.md)
+
+## Verification
+
+The final local verification run:
+
+| Metric | Result |
+| --- | --- |
+| Tests | 220 passed |
+| Line coverage | 92.2% |
+| Branch coverage | 82.4% |
+
+Commands:
+
+```bash
+./mvnw test
+./mvnw -B -ntp clean verify -Pcoverage
+```
+
+GitHub Actions has a build verification workflow and a SonarQube workflow. The Sonar workflow is
+the one that runs the tests and publishes coverage. See
+[Build, test and CI](docs/slices/00-build-test-and-ci.md) for the exact commands and the current
+gaps.
+
+## Production adoption checklist
+
+Before using this service in a real system, add:
+
+- authenticated and authorised access;
+- a persistent database and schema migrations;
+- a real claim source or import instead of `POST /api/claims`;
+- an idempotency key and replay handling for payments and refunds;
+- pagination for payment and refund history;
+- a decision on multi-currency, interest, fees and accounting export;
+- metrics, alerting and audit retention;
+- explicit `spring.jpa.open-in-view=false` in the main profile;
+- tuned lock timeouts and retry behaviour.
+
+## Project background
+
+- [Business requirements](business-requirements.md)
+- [Technical requirements](technical-requirements.md)
+- [Goals](goals.md)
