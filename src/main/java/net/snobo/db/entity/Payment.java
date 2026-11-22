@@ -61,6 +61,10 @@ public class Payment {
     @OrderBy("id ASC")
     private final List<PaymentAllocation> allocations = new ArrayList<>();
 
+    @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("refundedOn ASC, id ASC")
+    private final List<Refund> refunds = new ArrayList<>();
+
     protected Payment() {
     }
 
@@ -86,6 +90,20 @@ public class Payment {
         return allocation;
     }
 
+    public void addRefund(Refund refund) {
+        if (refund == null) {
+            throw new IllegalArgumentException("refund is required");
+        }
+        if (refund.getPayment() != null && refund.getPayment() != this) {
+            throw new IllegalStateException("refund belongs to another payment");
+        }
+        if (refund.getAmount().compareTo(unallocatedAmount()) > 0) {
+            throw new IllegalArgumentException("refund exceeds available credit");
+        }
+        refunds.add(refund);
+        refund.setPayment(this);
+    }
+
     public BigDecimal allocatedAmount() {
         return allocations.stream()
                 .map(PaymentAllocation::getAmount)
@@ -93,8 +111,16 @@ public class Payment {
                 .setScale(2);
     }
 
+    public BigDecimal refundedAmount() {
+        return refunds.stream()
+                .map(Refund::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2);
+    }
+
     public BigDecimal unallocatedAmount() {
-        return amount.subtract(allocatedAmount()).setScale(2);
+        BigDecimal remaining = amount.subtract(allocatedAmount()).subtract(refundedAmount());
+        return Money.requireNonNegative(remaining, "unallocatedAmount");
     }
 
     private static String normalizeReference(String reference) {
@@ -141,6 +167,10 @@ public class Payment {
 
     public List<PaymentAllocation> getAllocations() {
         return Collections.unmodifiableList(allocations);
+    }
+
+    public List<Refund> getRefunds() {
+        return Collections.unmodifiableList(refunds);
     }
 
     void setPaymentPlan(PaymentPlan paymentPlan) {

@@ -28,8 +28,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import net.snobo.db.entity.Claim;
 import net.snobo.db.entity.Installment;
 import net.snobo.db.entity.PaymentPlan;
+import net.snobo.db.entity.Payment;
 import net.snobo.db.entity.TestInstallments;
 import net.snobo.db.repository.ClaimRepository;
+import net.snobo.db.repository.PaymentRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -43,6 +45,9 @@ class PaymentPlanFlowTest {
 
     @Autowired
     private ClaimRepository claimRepository;
+
+    @Autowired
+    private PaymentRepository paymentRepository;
 
     @MockitoBean
     private Clock clock;
@@ -195,6 +200,75 @@ class PaymentPlanFlowTest {
                 .andExpect(jsonPath("$[0].reference").value("first"))
                 .andExpect(jsonPath("$[1].reference").value("second"))
                 .andExpect(jsonPath("$[1].unallocatedAmount").value(80.00));
+    }
+
+    @Test
+    void recordsRefundsAndReducesCredit() throws Exception {
+        Claim claim = Claim.create(4716L, new BigDecimal("100.00"), "Grace Hopper",
+                LocalDate.of(2026, 1, 15));
+        PaymentPlan plan = claim.createPaymentPlan();
+        plan.addInstallment(Installment.create(1, new BigDecimal("100.00"),
+                LocalDate.of(2026, 4, 1)));
+        plan.validateAgainstClaim();
+        claimRepository.saveAndFlush(claim);
+
+        mockMvc.perform(post("/api/claims/0000004716/payment-plan/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":150.00,"paidOn":"2026-03-14","reference":"payment-1"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.payment.unallocatedAmount").value(50.00))
+                .andExpect(jsonPath("$.paymentPlan.creditAmount").value(50.00));
+
+        Payment payment = paymentRepository.findByPaymentPlanIdOrderByPaidOnAscIdAsc(plan.getId()).get(0);
+
+        mockMvc.perform(post("/api/claims/0000004716/payment-plan/payments/"
+                        + payment.getPaymentId() + "/refunds")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":20.00,"refundedOn":"2026-03-14","reference":"refund-1"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.refund.amount").value(20.00))
+                .andExpect(jsonPath("$.refund.paymentId").value(payment.getPaymentId()))
+                .andExpect(jsonPath("$.payment.refundedAmount").value(20.00))
+                .andExpect(jsonPath("$.payment.unallocatedAmount").value(30.00))
+                .andExpect(jsonPath("$.paymentPlan.creditAmount").value(30.00))
+                .andExpect(jsonPath("$.paymentPlan.refundedAmount").value(20.00));
+
+        mockMvc.perform(get("/api/claims/0000004716/payment-plan"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.creditAmount").value(30.00))
+                .andExpect(jsonPath("$.refundedAmount").value(20.00))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+        mockMvc.perform(get("/api/claims/0000004716/payment-plan/refunds"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].refundId").isNotEmpty())
+                .andExpect(jsonPath("$[0].reference").value("refund-1"));
+
+        mockMvc.perform(post("/api/claims/0000004716/payment-plan/payments/"
+                        + payment.getPaymentId() + "/refunds")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":30.00,"refundedOn":"2026-03-15","reference":"refund-2"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.payment.unallocatedAmount").value(0.00))
+                .andExpect(jsonPath("$.paymentPlan.creditAmount").value(0.00))
+                .andExpect(jsonPath("$.paymentPlan.refundedAmount").value(50.00));
+
+        mockMvc.perform(post("/api/claims/0000004716/payment-plan/payments/"
+                        + payment.getPaymentId() + "/refunds")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":1.00,"refundedOn":"2026-03-15","reference":"refund-3"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Insufficient credit"))
+                .andExpect(jsonPath("$.detail").value("Refund exceeds available credit 0.00"));
     }
 
     private void seedPaymentPlan() {

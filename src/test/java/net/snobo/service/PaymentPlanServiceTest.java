@@ -37,8 +37,7 @@ import net.snobo.service.exception.PaymentPlanNotFoundException;
 @ExtendWith(MockitoExtension.class)
 class PaymentPlanServiceTest {
 
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-03-15T10:00:00Z"),
-            ZoneId.of("Europe/Berlin"));
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-03-15T10:00:00Z"), ZoneId.of("Europe/Berlin"));
 
     @Mock
     private ClaimRepository claimRepository;
@@ -53,8 +52,7 @@ class PaymentPlanServiceTest {
     @Test
     void returnsFlatResponseForActivePlan() {
         Claim claim = claimWithPlan(
-                TestInstallments.paid(1, new BigDecimal("100.00"), new BigDecimal("100.00"),
-                        LocalDate.of(2026, 3, 1)),
+                TestInstallments.paid(1, new BigDecimal("100.00"), new BigDecimal("100.00"), LocalDate.of(2026, 3, 1)),
                 Installment.create(2, new BigDecimal("200.00"), LocalDate.of(2026, 5, 1)));
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
@@ -67,10 +65,9 @@ class PaymentPlanServiceTest {
         assertThat(response.outstandingBalance()).isEqualByComparingTo("200.00");
         assertThat(response.status()).isEqualTo(Status.ACTIVE);
         assertThat(response.installments()).hasSize(2);
-        assertThat(response.installments()).extracting(InstallmentResponse::installmentNumber)
-                .containsExactly(1, 2);
+        assertThat(response.installments()).extracting(InstallmentResponse::installmentNumber).containsExactly(1, 2);
 
-        InstallmentResponse first = response.installments().get(0);
+        InstallmentResponse first = response.installments().getFirst();
         assertThat(first.scheduledAmount()).isEqualByComparingTo("100.00");
         assertThat(first.amountPaid()).isEqualByComparingTo("100.00");
         assertThat(first.dueDate()).isEqualTo(LocalDate.of(2026, 3, 1));
@@ -81,11 +78,20 @@ class PaymentPlanServiceTest {
         assertThat(second.dueDate()).isEqualTo(LocalDate.of(2026, 5, 1));
     }
 
+    private static Claim claimWithPlan(Installment... installments) {
+        Claim claim = Claim.create(4711L, new BigDecimal("300.00"), "Ada Lovelace", LocalDate.of(2026, 1, 15));
+        PaymentPlan plan = claim.createPaymentPlan();
+        for (Installment installment : installments) {
+            plan.addInstallment(installment);
+        }
+        plan.validateAgainstClaim();
+        return claim;
+    }
+
     @Test
     void reportsOverdueWhenPastDueInstallmentIsUnpaid() {
         Claim claim = claimWithPlan(
-                TestInstallments.paid(1, new BigDecimal("100.00"), new BigDecimal("100.00"),
-                        LocalDate.of(2026, 3, 1)),
+                TestInstallments.paid(1, new BigDecimal("100.00"), new BigDecimal("100.00"), LocalDate.of(2026, 3, 1)),
                 Installment.create(2, new BigDecimal("200.00"), LocalDate.of(2026, 3, 10)));
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
@@ -99,8 +105,7 @@ class PaymentPlanServiceTest {
     @Test
     void reportsCompletedWhenAllInstallmentsArePaid() {
         Claim claim = claimWithPlan(
-                TestInstallments.paid(1, new BigDecimal("100.00"), new BigDecimal("100.00"),
-                        LocalDate.of(2026, 3, 1)),
+                TestInstallments.paid(1, new BigDecimal("100.00"), new BigDecimal("100.00"), LocalDate.of(2026, 3, 1)),
                 TestInstallments.paid(2, new BigDecimal("200.00"), new BigDecimal("200.00"),
                         LocalDate.of(2026, 3, 10)));
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
@@ -116,27 +121,23 @@ class PaymentPlanServiceTest {
     void rejectsUnknownClaim() {
         given(claimRepository.findByClaimNumber(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> paymentPlanService.getPaymentPlanForClaim(999L))
-                .isInstanceOf(ClaimNotFoundException.class)
-                .hasMessage("No claim 0000000999");
+        assertThatThrownBy(() -> paymentPlanService.getPaymentPlanForClaim(999L)).isInstanceOf(
+                ClaimNotFoundException.class).hasMessage("No claim 0000000999");
     }
 
     @Test
     void rejectsClaimWithoutPaymentPlan() {
-        Claim claim = Claim.create(4711L, new BigDecimal("300.00"), "Ada Lovelace",
-                LocalDate.of(2026, 1, 15));
+        Claim claim = Claim.create(4711L, new BigDecimal("300.00"), "Ada Lovelace", LocalDate.of(2026, 1, 15));
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentPlanService.getPaymentPlanForClaim(4711L))
-                .isInstanceOf(PaymentPlanNotFoundException.class)
-                .hasMessage("No payment plan for claim 0000004711");
+        assertThatThrownBy(() -> paymentPlanService.getPaymentPlanForClaim(4711L)).isInstanceOf(
+                PaymentPlanNotFoundException.class).hasMessage("No payment plan for claim 0000004711");
     }
 
     @Test
     void rejectsInvalidClaimNumber() {
-        assertThatThrownBy(() -> paymentPlanService.getPaymentPlanForClaim(0L))
-                .isInstanceOf(InvalidClaimRequestException.class)
-                .hasMessage("claimNumber must be positive");
+        assertThatThrownBy(() -> paymentPlanService.getPaymentPlanForClaim(0L)).isInstanceOf(
+                InvalidClaimRequestException.class).hasMessage("claimNumber must be positive");
     }
 
     @Test
@@ -153,13 +154,17 @@ class PaymentPlanServiceTest {
         assertThat(response.outstandingBalance()).isEqualByComparingTo("500.00");
         assertThat(response.status()).isEqualTo(Status.ACTIVE);
         assertThat(response.installments()).hasSize(9);
-        assertThat(response.installments().subList(0, 8)).allSatisfy(installment ->
-                assertThat(installment.scheduledAmount()).isEqualByComparingTo("55.55"));
+        assertThat(response.installments().subList(0, 8)).allSatisfy(
+                installment -> assertThat(installment.scheduledAmount()).isEqualByComparingTo("55.55"));
         assertThat(response.installments().get(8).scheduledAmount()).isEqualByComparingTo("55.60");
         assertThat(response.installments().get(0).dueDate()).isEqualTo(LocalDate.of(2026, 4, 1));
         assertThat(response.installments().get(8).dueDate()).isEqualTo(LocalDate.of(2026, 12, 1));
         assertThat(claim.getPaymentPlan()).isNotNull();
         assertThat(claim.getPaymentPlan().getInstallments()).hasSize(9);
+    }
+
+    private static Claim claimWithoutPlan(String total) {
+        return Claim.create(4711L, new BigDecimal(total), "Ada Lovelace", LocalDate.of(2026, 1, 15));
     }
 
     @Test
@@ -171,8 +176,8 @@ class PaymentPlanServiceTest {
                 new CreatePaymentPlanRequest(null, new BigDecimal("80.00"), LocalDate.of(2026, 4, 1)));
 
         assertThat(response.installments()).hasSize(7);
-        assertThat(response.installments().subList(0, 6)).allSatisfy(installment ->
-                assertThat(installment.scheduledAmount()).isEqualByComparingTo("80.00"));
+        assertThat(response.installments().subList(0, 6)).allSatisfy(
+                installment -> assertThat(installment.scheduledAmount()).isEqualByComparingTo("80.00"));
         assertThat(response.installments().get(6).scheduledAmount()).isEqualByComparingTo("20.00");
         assertThat(response.outstandingBalance()).isEqualByComparingTo("500.00");
     }
@@ -182,11 +187,11 @@ class PaymentPlanServiceTest {
         Claim claim = claimWithoutPlan("500.00");
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
-        PaymentPlanResponse response = paymentPlanService.createPaymentPlan(4711L,
-                new CreatePaymentPlanRequest(5, null, null));
+        PaymentPlanResponse response =
+                paymentPlanService.createPaymentPlan(4711L, new CreatePaymentPlanRequest(5, null, null));
 
         assertThat(response.installments()).hasSize(5);
-        assertThat(response.installments().get(0).dueDate()).isEqualTo(LocalDate.of(2026, 4, 1));
+        assertThat(response.installments().getFirst().dueDate()).isEqualTo(LocalDate.of(2026, 4, 1));
     }
 
     @Test
@@ -194,33 +199,32 @@ class PaymentPlanServiceTest {
         Claim claim = claimWithoutPlan("500.00");
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L,
-                new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 3, 1))))
-                .isInstanceOf(InvalidPaymentPlanRequestException.class)
-                .hasMessage("firstDueDate must not be in the past");
+        CreatePaymentPlanRequest request = new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 3, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, request)).isInstanceOf(
+                InvalidPaymentPlanRequestException.class).hasMessage("firstDueDate must not be in the past");
     }
 
     @Test
     void rejectsBothInstallmentModes() {
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L,
-                new CreatePaymentPlanRequest(5, new BigDecimal("100.00"), LocalDate.of(2026, 4, 1))))
-                .isInstanceOf(InvalidPaymentPlanRequestException.class)
+        CreatePaymentPlanRequest request =
+                new CreatePaymentPlanRequest(5, new BigDecimal("100.00"), LocalDate.of(2026, 4, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, request)).isInstanceOf(
+                        InvalidPaymentPlanRequestException.class)
                 .hasMessage("provide exactly one of installmentCount or installmentAmount");
     }
 
     @Test
     void rejectsMissingInstallmentMode() {
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L,
-                new CreatePaymentPlanRequest(null, null, LocalDate.of(2026, 4, 1))))
-                .isInstanceOf(InvalidPaymentPlanRequestException.class)
+        CreatePaymentPlanRequest request = new CreatePaymentPlanRequest(null, null, LocalDate.of(2026, 4, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, request)).isInstanceOf(
+                        InvalidPaymentPlanRequestException.class)
                 .hasMessage("provide exactly one of installmentCount or installmentAmount");
     }
 
     @Test
     void rejectsNullRequest() {
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, null))
-                .isInstanceOf(InvalidPaymentPlanRequestException.class)
-                .hasMessage("request body is required");
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, null)).isInstanceOf(
+                InvalidPaymentPlanRequestException.class).hasMessage("request body is required");
     }
 
     @Test
@@ -228,10 +232,9 @@ class PaymentPlanServiceTest {
         Claim claim = claimWithoutPlan("500.00");
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L,
-                new CreatePaymentPlanRequest(121, null, LocalDate.of(2026, 4, 1))))
-                .isInstanceOf(InvalidPaymentPlanRequestException.class)
-                .hasMessage("installmentCount must be between 1 and 120");
+        CreatePaymentPlanRequest request = new CreatePaymentPlanRequest(121, null, LocalDate.of(2026, 4, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, request)).isInstanceOf(
+                InvalidPaymentPlanRequestException.class).hasMessage("installmentCount must be between 1 and 120");
     }
 
     @Test
@@ -239,9 +242,10 @@ class PaymentPlanServiceTest {
         Claim claim = claimWithoutPlan("500.00");
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L,
-                new CreatePaymentPlanRequest(null, new BigDecimal("0.001"), LocalDate.of(2026, 4, 1))))
-                .isInstanceOf(InvalidPaymentPlanRequestException.class)
+        CreatePaymentPlanRequest request =
+                new CreatePaymentPlanRequest(null, new BigDecimal("0.001"), LocalDate.of(2026, 4, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, request)).isInstanceOf(
+                        InvalidPaymentPlanRequestException.class)
                 .hasMessage("installmentAmount must have at most 2 decimal places");
     }
 
@@ -250,67 +254,48 @@ class PaymentPlanServiceTest {
         Claim claim = claimWithoutPlan("500.00");
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L,
-                new CreatePaymentPlanRequest(null, new BigDecimal("0.01"), LocalDate.of(2026, 4, 1))))
-                .isInstanceOf(InvalidPaymentPlanRequestException.class)
+        CreatePaymentPlanRequest request =
+                new CreatePaymentPlanRequest(null, new BigDecimal("0.01"), LocalDate.of(2026, 4, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, request)).isInstanceOf(
+                        InvalidPaymentPlanRequestException.class)
                 .hasMessage("installmentAmount is too low: plan would exceed 120 installments");
     }
 
     @Test
     void rejectsCreateForExistingPlan() {
-        Claim claim = claimWithPlan(
-                Installment.create(1, new BigDecimal("300.00"), LocalDate.of(2026, 4, 1)));
+        Claim claim = claimWithPlan(Installment.create(1, new BigDecimal("300.00"), LocalDate.of(2026, 4, 1)));
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L,
-                new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 4, 1))))
-                .isInstanceOf(PaymentPlanAlreadyExistsException.class)
-                .hasMessage("Payment plan already exists for claim 0000004711");
+        CreatePaymentPlanRequest request = new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 4, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, request)).isInstanceOf(
+                PaymentPlanAlreadyExistsException.class).hasMessage("Payment plan already exists for claim 0000004711");
     }
 
     @Test
     void mapsUniqueConstraintViolationToExistingPlan() {
         Claim claim = claimWithoutPlan("500.00");
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
-        given(claimRepository.saveAndFlush(any(Claim.class)))
-                .willThrow(new DataIntegrityViolationException("unique constraint"));
+        given(claimRepository.saveAndFlush(any(Claim.class))).willThrow(
+                new DataIntegrityViolationException("unique constraint"));
 
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L,
-                new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 4, 1))))
-                .isInstanceOf(PaymentPlanAlreadyExistsException.class)
-                .hasMessage("Payment plan already exists for claim 0000004711");
+        CreatePaymentPlanRequest request = new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 4, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(4711L, request)).isInstanceOf(
+                PaymentPlanAlreadyExistsException.class).hasMessage("Payment plan already exists for claim 0000004711");
     }
 
     @Test
     void rejectsInvalidClaimNumberForCreate() {
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(0L,
-                new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 4, 1))))
-                .isInstanceOf(InvalidClaimRequestException.class)
-                .hasMessage("claimNumber must be positive");
+        CreatePaymentPlanRequest request = new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 4, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(0L, request)).isInstanceOf(
+                InvalidClaimRequestException.class).hasMessage("claimNumber must be positive");
     }
 
     @Test
     void rejectsUnknownClaimForCreate() {
         given(claimRepository.findByClaimNumber(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(999L,
-                new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 4, 1))))
-                .isInstanceOf(ClaimNotFoundException.class)
-                .hasMessage("No claim 0000000999");
-    }
-
-    private static Claim claimWithoutPlan(String total) {
-        return Claim.create(4711L, new BigDecimal(total), "Ada Lovelace", LocalDate.of(2026, 1, 15));
-    }
-
-    private static Claim claimWithPlan(Installment... installments) {
-        Claim claim = Claim.create(4711L, new BigDecimal("300.00"), "Ada Lovelace",
-                LocalDate.of(2026, 1, 15));
-        PaymentPlan plan = claim.createPaymentPlan();
-        for (Installment installment : installments) {
-            plan.addInstallment(installment);
-        }
-        plan.validateAgainstClaim();
-        return claim;
+        CreatePaymentPlanRequest request = new CreatePaymentPlanRequest(5, null, LocalDate.of(2026, 4, 1));
+        assertThatThrownBy(() -> paymentPlanService.createPaymentPlan(999L, request)).isInstanceOf(
+                ClaimNotFoundException.class).hasMessage("No claim 0000000999");
     }
 }

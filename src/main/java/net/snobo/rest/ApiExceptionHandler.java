@@ -23,12 +23,17 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import net.snobo.service.exception.ClaimNotFoundException;
 import net.snobo.service.exception.DuplicateClaimException;
 import net.snobo.service.exception.DuplicatePaymentReferenceException;
+import net.snobo.service.exception.DuplicateRefundReferenceException;
+import net.snobo.service.exception.InsufficientCreditException;
 import net.snobo.service.exception.InvalidClaimRequestException;
 import net.snobo.service.exception.InvalidPaymentPlanRequestException;
 import net.snobo.service.exception.InvalidPaymentRequestException;
+import net.snobo.service.exception.InvalidRefundRequestException;
 import net.snobo.service.exception.PaymentConflictException;
+import net.snobo.service.exception.PaymentNotFoundException;
 import net.snobo.service.exception.PaymentPlanAlreadyExistsException;
 import net.snobo.service.exception.PaymentPlanNotFoundException;
+import net.snobo.service.exception.RefundConflictException;
 
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -69,13 +74,13 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidPaymentPlanRequestException.class)
     public ProblemDetail handleInvalidPaymentPlanRequest(InvalidPaymentPlanRequestException exception,
                                                          HttpServletRequest request) {
-        return problem(HttpStatus.BAD_REQUEST, "Invalid request", exception.getMessage(), request);
+        return problem(HttpStatus.BAD_REQUEST, INVALID_REQUEST, exception.getMessage(), request);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ProblemDetail handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException exception,
                                                           HttpServletRequest request) {
-        return problem(HttpStatus.BAD_REQUEST, "Invalid request",
+        return problem(HttpStatus.BAD_REQUEST, INVALID_REQUEST,
                 "claimNumber must be a valid number", request);
     }
 
@@ -111,6 +116,39 @@ public class ApiExceptionHandler {
                                                   HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "Payment conflict",
                 "Another payment is being recorded; please retry", request);
+    }
+
+    @ExceptionHandler(PaymentNotFoundException.class)
+    public ProblemDetail handlePaymentNotFound(PaymentNotFoundException exception,
+                                               HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Payment not found", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidRefundRequestException.class)
+    public ProblemDetail handleInvalidRefundRequest(InvalidRefundRequestException exception,
+                                                    HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid refund request",
+                exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(DuplicateRefundReferenceException.class)
+    public ProblemDetail handleDuplicateRefundReference(DuplicateRefundReferenceException exception,
+                                                        HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Refund reference already exists",
+                exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(InsufficientCreditException.class)
+    public ProblemDetail handleInsufficientCredit(InsufficientCreditException exception,
+                                                  HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Insufficient credit",
+                exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(RefundConflictException.class)
+    public ProblemDetail handleRefundConflict(RefundConflictException exception,
+                                              HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Refund conflict", exception.getMessage(), request);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

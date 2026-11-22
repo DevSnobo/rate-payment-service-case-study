@@ -242,3 +242,33 @@ continue with your recommendations. go
 - Payments use a pessimistic claim lock, reject future `paidOn` dates, keep an
   optional unique reference per plan, and accept payments on completed plans as credit.
 - New stacked branch `feature/record-payments`; 175 tests pass.
+
+---
+
+## 011 — Refund/credit settlement rundown
+
+```text
+now on to the next slice. give me the detailed rundown as you did before for me to review.
+```
+
+**Decisions**
+
+- Planning only; no code changes. Outlined the refund/credit settlement slice:
+  refund entity, API, validation, concurrency, tests, branch plan and open decisions.
+
+---
+
+## 012 — Refund/credit settlement implementation
+
+```text
+i agree with your suggestions. go
+```
+
+**Decisions**
+
+- Implemented per-payment refunds against unallocated credit, including partial and
+  multiple refunds, refund history, `refundedAmount` on payments and plans, and a
+  reduced net `creditAmount`.
+- Refunds use the same pessimistic claim lock, reject future dates and over-refunds,
+  and keep completed plans completed.
+- New stacked branch `feature/refunds`; 220 tests pass.

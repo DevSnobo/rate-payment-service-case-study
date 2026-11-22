@@ -16,12 +16,16 @@ import net.snobo.rest.dto.ClaimResponse;
 import net.snobo.rest.dto.CreateClaimRequest;
 import net.snobo.rest.dto.CreatePaymentPlanRequest;
 import net.snobo.rest.dto.CreatePaymentRequest;
+import net.snobo.rest.dto.CreateRefundRequest;
 import net.snobo.rest.dto.PaymentPlanResponse;
 import net.snobo.rest.dto.PaymentResponse;
 import net.snobo.rest.dto.RecordPaymentResponse;
+import net.snobo.rest.dto.RecordRefundResponse;
+import net.snobo.rest.dto.RefundResponse;
 import net.snobo.service.ClaimService;
 import net.snobo.service.PaymentPlanService;
 import net.snobo.service.PaymentService;
+import net.snobo.service.RefundService;
 
 @RestController
 @RequestMapping("/api/claims")
@@ -30,12 +34,14 @@ public class ClaimManagementController {
     private final ClaimService claimService;
     private final PaymentPlanService paymentPlanService;
     private final PaymentService paymentService;
+    private final RefundService refundService;
 
     public ClaimManagementController(ClaimService claimService, PaymentPlanService paymentPlanService,
-                                     PaymentService paymentService) {
+                                     PaymentService paymentService, RefundService refundService) {
         this.claimService = claimService;
         this.paymentPlanService = paymentPlanService;
         this.paymentService = paymentService;
+        this.refundService = refundService;
     }
 
     @PostMapping
@@ -68,6 +74,19 @@ public class ClaimManagementController {
     @GetMapping("/{claimNumber}/payment-plan/payments")
     public List<PaymentResponse> getPayments(@PathVariable long claimNumber) {
         return paymentService.getPayments(claimNumber);
+    }
+
+    @PostMapping("/{claimNumber}/payment-plan/payments/{paymentId}/refunds")
+    public ResponseEntity<RecordRefundResponse> recordRefund(@PathVariable long claimNumber,
+                                                             @PathVariable String paymentId,
+                                                             @RequestBody CreateRefundRequest request) {
+        RecordRefundResponse response = refundService.recordRefund(claimNumber, paymentId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{claimNumber}/payment-plan/refunds")
+    public List<RefundResponse> getRefunds(@PathVariable long claimNumber) {
+        return refundService.getRefunds(claimNumber);
     }
 
     @GetMapping("/{claimNumber}/payment-plan")

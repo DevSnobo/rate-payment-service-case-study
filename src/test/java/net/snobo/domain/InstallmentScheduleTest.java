@@ -41,24 +41,24 @@ class InstallmentScheduleTest {
 
     @Test
     void countModeRejectsZeroOrNegativeCount() {
-        assertThatThrownBy(() -> InstallmentSchedule.fromCount(
-                new BigDecimal("500.00"), 0, FIRST_DUE_DATE))
+        BigDecimal totalAmount = new BigDecimal("500.00");
+        assertThatThrownBy(() -> InstallmentSchedule.fromCount(totalAmount, 0, FIRST_DUE_DATE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("installmentCount must be between 1 and 120");
     }
 
     @Test
     void countModeRejectsMoreThanMaximum() {
-        assertThatThrownBy(() -> InstallmentSchedule.fromCount(
-                new BigDecimal("500.00"), 121, FIRST_DUE_DATE))
+        BigDecimal totalAmount = new BigDecimal("500.00");
+        assertThatThrownBy(() -> InstallmentSchedule.fromCount(totalAmount, 121, FIRST_DUE_DATE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("installmentCount must be between 1 and 120");
     }
 
     @Test
     void countModeRejectsCountThatMakesZeroRegularAmount() {
-        assertThatThrownBy(() -> InstallmentSchedule.fromCount(
-                new BigDecimal("0.09"), 10, FIRST_DUE_DATE))
+        BigDecimal totalAmount = new BigDecimal("0.09");
+        assertThatThrownBy(() -> InstallmentSchedule.fromCount(totalAmount, 10, FIRST_DUE_DATE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("installmentCount is too high for the claim total");
     }
@@ -80,9 +80,8 @@ class InstallmentScheduleTest {
         List<ScheduledInstallment> schedule = InstallmentSchedule.fromAmount(
                 new BigDecimal("500.00"), new BigDecimal("100.00"), FIRST_DUE_DATE);
 
-        assertThat(schedule).hasSize(5);
-        assertThat(schedule).allSatisfy(installment ->
-                assertThat(installment.amount()).isEqualByComparingTo("100.00"));
+        assertThat(schedule).hasSize(5)
+                .allSatisfy(installment -> assertThat(installment.amount()).isEqualByComparingTo("100.00"));
     }
 
     @Test
@@ -91,7 +90,7 @@ class InstallmentScheduleTest {
                 new BigDecimal("500.00"), new BigDecimal("600.00"), FIRST_DUE_DATE);
 
         assertThat(schedule).hasSize(1);
-        assertThat(schedule.get(0).amount()).isEqualByComparingTo("500.00");
+        assertThat(schedule.getFirst().amount()).isEqualByComparingTo("500.00");
     }
 
     @Test
@@ -106,16 +105,18 @@ class InstallmentScheduleTest {
 
     @Test
     void amountModeRejectsTooLowAmount() {
-        assertThatThrownBy(() -> InstallmentSchedule.fromAmount(
-                new BigDecimal("500.00"), new BigDecimal("0.01"), FIRST_DUE_DATE))
+        BigDecimal totalAmount = new BigDecimal("500.00");
+        BigDecimal installmentAmount = new BigDecimal("0.01");
+        assertThatThrownBy(() -> InstallmentSchedule.fromAmount(totalAmount, installmentAmount, FIRST_DUE_DATE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("installmentAmount is too low: plan would exceed 120 installments");
     }
 
     @Test
     void amountModeRejectsValuesNeedingRounding() {
-        assertThatThrownBy(() -> InstallmentSchedule.fromAmount(
-                new BigDecimal("500.00"), new BigDecimal("80.001"), FIRST_DUE_DATE))
+        BigDecimal totalAmount = new BigDecimal("500.00");
+        BigDecimal installmentAmount = new BigDecimal("80.001");
+        assertThatThrownBy(() -> InstallmentSchedule.fromAmount(totalAmount, installmentAmount, FIRST_DUE_DATE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("installmentAmount must have at most 2 decimal places");
     }

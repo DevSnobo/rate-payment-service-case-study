@@ -13,6 +13,7 @@ class PaymentPlanAllocationTest {
 
     private static final Instant RECORDED_AT = Instant.parse("2026-03-15T10:00:00Z");
     private static final LocalDate PAID_ON = LocalDate.of(2026, 3, 14);
+    private static final LocalDate REFUNDED_ON = LocalDate.of(2026, 3, 20);
 
     @Test
     void allocatesOldestDueDateFirst() {
@@ -123,6 +124,34 @@ class PaymentPlanAllocationTest {
         assertThatThrownBy(() -> plan.allocate(payment))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("payment is not attached to this plan");
+    }
+
+    @Test
+    void refundsReducePlanCreditAndIncreaseRefundedAmount() {
+        PaymentPlan plan = planWithTotal("100.00",
+                Installment.create(1, new BigDecimal("100.00"), LocalDate.of(2026, 2, 1)));
+        Payment payment = pay(plan, "150.00");
+
+        payment.addRefund(Refund.create(new BigDecimal("20.00"), REFUNDED_ON, null, RECORDED_AT));
+
+        assertThat(plan.amountPaid()).isEqualByComparingTo("100.00");
+        assertThat(plan.outstandingBalance()).isEqualByComparingTo("0.00");
+        assertThat(plan.creditBalance()).isEqualByComparingTo("30.00");
+        assertThat(plan.refundedAmount()).isEqualByComparingTo("20.00");
+    }
+
+    @Test
+    void planRefundedAmountSumsPayments() {
+        PaymentPlan plan = planWithTotal("100.00",
+                Installment.create(1, new BigDecimal("100.00"), LocalDate.of(2026, 2, 1)));
+        Payment first = pay(plan, "120.00");
+        Payment second = pay(plan, "30.00");
+
+        first.addRefund(Refund.create(new BigDecimal("10.00"), REFUNDED_ON, null, RECORDED_AT));
+        second.addRefund(Refund.create(new BigDecimal("5.00"), REFUNDED_ON, null, RECORDED_AT));
+
+        assertThat(plan.refundedAmount()).isEqualByComparingTo("15.00");
+        assertThat(plan.creditBalance()).isEqualByComparingTo("35.00");
     }
 
     private static PaymentPlan planWithTotal(String total, Installment... installments) {
