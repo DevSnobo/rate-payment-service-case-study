@@ -10,7 +10,8 @@ import net.snobo.domain.ClaimNumbers;
 import net.snobo.domain.Status;
 
 public record PaymentPlanResponse(String claimNumber, BigDecimal totalClaimAmount, BigDecimal amountPaid,
-                                  BigDecimal outstandingBalance, BigDecimal creditAmount, Status status,
+                                  BigDecimal outstandingBalance, BigDecimal creditAmount,
+                                  BigDecimal refundedAmount, Status status,
                                   List<InstallmentResponse> installments) {
 
     public static PaymentPlanResponse from(PaymentPlan plan, Clock clock) {
@@ -21,6 +22,7 @@ public record PaymentPlanResponse(String claimNumber, BigDecimal totalClaimAmoun
                 plan.amountPaid(),
                 plan.outstandingBalance(),
                 plan.creditBalance(),
+                plan.refundedAmount(),
                 plan.statusAt(clock),
                 plan.getInstallments().stream().map(InstallmentResponse::from).toList());
     }
