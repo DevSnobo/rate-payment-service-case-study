@@ -17,11 +17,12 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import net.snobo.domain.Status;
 
 @Entity
-@Table(name = "payment_plans")
+@Table(name = "payment_plans", uniqueConstraints = @UniqueConstraint(columnNames = "claim_number"))
 public class PaymentPlan {
 
     @Id
