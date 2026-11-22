@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import net.snobo.rest.dto.ClaimResponse;
 import net.snobo.rest.dto.CreateClaimRequest;
+import net.snobo.rest.dto.CreatePaymentPlanRequest;
 import net.snobo.rest.dto.PaymentPlanResponse;
 import net.snobo.service.ClaimService;
 import net.snobo.service.PaymentPlanService;
@@ -38,6 +39,14 @@ public class ClaimManagementController {
     @GetMapping("/{claimNumber}")
     public ClaimResponse getClaim(@PathVariable long claimNumber) {
         return claimService.getClaim(claimNumber);
+    }
+
+    @PostMapping("/{claimNumber}/payment-plan")
+    public ResponseEntity<PaymentPlanResponse> createPaymentPlan(@PathVariable long claimNumber,
+                                                                 @RequestBody CreatePaymentPlanRequest request) {
+        PaymentPlanResponse response = paymentPlanService.createPaymentPlan(claimNumber, request);
+        URI location = URI.create("/api/claims/" + response.claimNumber() + "/payment-plan");
+        return ResponseEntity.created(location).body(response);
     }
 
     @GetMapping("/{claimNumber}/payment-plan")

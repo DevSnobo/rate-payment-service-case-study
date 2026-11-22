@@ -26,44 +26,43 @@ class ClaimTest {
 
     @Test
     void createRejectsZeroClaimNumber() {
-        assertThatThrownBy(() -> Claim.create(0L, new BigDecimal("300.00"), "Ada", CREATED_ON))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("claimNumber must be positive");
+        BigDecimal totalAmount = new BigDecimal("300.00");
+        assertThatThrownBy(() -> Claim.create(0L, totalAmount, "Ada", CREATED_ON)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("claimNumber must be positive");
     }
 
     @Test
     void createRejectsClaimNumberAboveTenDigits() {
-        assertThatThrownBy(() -> Claim.create(10_000_000_000L, new BigDecimal("300.00"), "Ada", CREATED_ON))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("claimNumber must have at most 10 digits");
+        BigDecimal totalAmount = new BigDecimal("300.00");
+        assertThatThrownBy(() -> Claim.create(10_000_000_000L, totalAmount, "Ada", CREATED_ON)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("claimNumber must have at most 10 digits");
     }
 
     @Test
     void createRejectsNullTotalAmount() {
-        assertThatThrownBy(() -> Claim.create(4711L, null, "Ada", CREATED_ON))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("totalAmount is required");
+        assertThatThrownBy(() -> Claim.create(4711L, null, "Ada", CREATED_ON)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("totalAmount is required");
     }
 
     @Test
     void createRejectsNonPositiveTotalAmount() {
-        assertThatThrownBy(() -> Claim.create(4711L, new BigDecimal("0.00"), "Ada", CREATED_ON))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("totalAmount must be positive");
+        BigDecimal totalAmount = new BigDecimal("0.00");
+        assertThatThrownBy(() -> Claim.create(4711L, totalAmount, "Ada", CREATED_ON)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("totalAmount must be positive");
     }
 
     @Test
     void createRejectsBlankDebtorName() {
-        assertThatThrownBy(() -> Claim.create(4711L, new BigDecimal("300.00"), "   ", CREATED_ON))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("debtorName is required");
+        BigDecimal totalAmount = new BigDecimal("300.00");
+        assertThatThrownBy(() -> Claim.create(4711L, totalAmount, "   ", CREATED_ON)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("debtorName is required");
     }
 
     @Test
     void createRejectsNullCreatedOn() {
-        assertThatThrownBy(() -> Claim.create(4711L, new BigDecimal("300.00"), "Ada", null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("createdOn is required");
+        BigDecimal totalAmount = new BigDecimal("300.00");
+        assertThatThrownBy(() -> Claim.create(4711L, totalAmount, "Ada", null)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("createdOn is required");
     }
 
     @Test
@@ -81,8 +80,7 @@ class ClaimTest {
         Claim claim = Claim.create(4711L, new BigDecimal("300.00"), "Ada", CREATED_ON);
         claim.createPaymentPlan();
 
-        assertThatThrownBy(claim::createPaymentPlan)
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(claim::createPaymentPlan).isInstanceOf(IllegalStateException.class)
                 .hasMessage("claim already has a payment plan");
     }
 }

@@ -69,7 +69,8 @@ class PaymentPlanStatusTest {
     void rejectsPlanWithoutInstallments() {
         PaymentPlan plan = planWith("100.00");
 
-        assertThatThrownBy(() -> plan.statusAt(clockAt("2026-03-15T10:00:00Z")))
+        Clock clock = clockAt("2026-03-15T10:00:00Z");
+        assertThatThrownBy(() -> plan.statusAt(clock))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -78,7 +79,8 @@ class PaymentPlanStatusTest {
         PaymentPlan plan = new PaymentPlan();
         plan.addInstallment(Installment.create(1, new BigDecimal("100.00"), LocalDate.of(2026, 3, 20)));
 
-        assertThatThrownBy(() -> plan.statusAt(clockAt("2026-03-15T10:00:00Z")))
+        Clock clock = clockAt("2026-03-15T10:00:00Z");
+        assertThatThrownBy(() -> plan.statusAt(clock))
                 .isInstanceOf(IllegalStateException.class);
     }
 

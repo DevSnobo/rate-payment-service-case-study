@@ -163,3 +163,51 @@ use subagents where you can parallelize your work. work in the same main working
 - Model and `@DataJpaTest` coverage on `feature/fix-db-model`; service/controller,
   `ProblemDetail` error handling and service/web/full-context tests on the stacked
   `feature/fix-service-structure` branch. 54 tests pass.
+
+---
+
+## 007 — Create-plan slice rundown
+
+```text
+let's continue to the create-plan slice. give me the rundown of what needs to be implemented in easy to digest steps. once I give the signal, you may implement this and commit incrementally
+```
+
+**Decisions**
+
+- Planning only; no code changes and no commits. Outlined the create-plan contract,
+  validation, installment split, errors, tests, branch strategy and the decisions that
+  still need the user's answer.
+
+---
+
+## 008 — Create-plan implementation
+
+```text
+yes, installmentAmount
+
+the two scenarios look good how you outlined them.
+regarding the edge case of overpaid installments. these should be allocated/spread on the future installments, if there are any further ones.
+otherwise good assumptions. document those
+
+rules:
+max of 120 is generous, but would suffice in this case study. first of month is also a good default here. no past dates allowed.
+
+the quote would be a good convenience feature, we can add it if there's more time. add it in the readme as potential feature.
+
+remainder on last installment, yes
+
+a note on the gitignored markdowns. those are for your progress tracking, not pushed to the repo. use them, but don't mention them again
+
+and now, incremental commits, with tests and error handling, go implement. give me some occasional report of where you are in your tasks
+```
+
+**Decisions**
+
+- Implemented the create-plan slice with `installmentCount` or `installmentAmount`,
+  max 120 installments, first-of-month default due date, no past due dates, and the
+  remainder on the last installment.
+- Documented the payment allocation rule: oldest due date first, then installment
+  number; overpayments spread to future installments when present; the remaining excess
+  is a refund/credit case.
+- Added the quote endpoint to the README as a potential feature.
+- New stacked branch `feature/create-plan`; 122 tests pass.

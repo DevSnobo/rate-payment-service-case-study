@@ -106,6 +106,37 @@ class PaymentPlanFlowTest {
                 .andExpect(jsonPath("$.detail").value("No payment plan for claim 0000004712"));
     }
 
+    @Test
+    void createsAndReadsPaymentPlan() throws Exception {
+        Claim claim = Claim.create(4713L, new BigDecimal("500.00"), "Grace Hopper",
+                LocalDate.of(2026, 1, 15));
+        claimRepository.saveAndFlush(claim);
+
+        mockMvc.perform(post("/api/claims/0000004713/payment-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"installmentAmount":80.00,"firstDueDate":"2026-04-01"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/api/claims/0000004713/payment-plan"))
+                .andExpect(jsonPath("$.claimNumber").value("0000004713"))
+                .andExpect(jsonPath("$.totalClaimAmount").value(500.00))
+                .andExpect(jsonPath("$.amountPaid").value(0.00))
+                .andExpect(jsonPath("$.outstandingBalance").value(500.00))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.installments.length()").value(7))
+                .andExpect(jsonPath("$.installments[0].scheduledAmount").value(80.00))
+                .andExpect(jsonPath("$.installments[6].scheduledAmount").value(20.00))
+                .andExpect(jsonPath("$.installments[0].dueDate").value("2026-04-01"))
+                .andExpect(jsonPath("$.installments[6].dueDate").value("2026-10-01"));
+
+        mockMvc.perform(get("/api/claims/0000004713/payment-plan"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.installments.length()").value(7))
+                .andExpect(jsonPath("$.installments[6].scheduledAmount").value(20.00))
+                .andExpect(content().string(containsString("\"totalClaimAmount\":500.00")));
+    }
+
     private void seedPaymentPlan() {
         Claim claim = Claim.create(4711L, new BigDecimal("300.00"), "Ada Lovelace",
                 LocalDate.of(2026, 1, 1));
