@@ -74,13 +74,13 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidPaymentPlanRequestException.class)
     public ProblemDetail handleInvalidPaymentPlanRequest(InvalidPaymentPlanRequestException exception,
                                                          HttpServletRequest request) {
-        return problem(HttpStatus.BAD_REQUEST, "Invalid request", exception.getMessage(), request);
+        return problem(HttpStatus.BAD_REQUEST, INVALID_REQUEST, exception.getMessage(), request);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ProblemDetail handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException exception,
                                                           HttpServletRequest request) {
-        return problem(HttpStatus.BAD_REQUEST, "Invalid request",
+        return problem(HttpStatus.BAD_REQUEST, INVALID_REQUEST,
                 "claimNumber must be a valid number", request);
     }
 

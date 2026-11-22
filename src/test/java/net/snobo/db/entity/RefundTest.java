@@ -35,28 +35,32 @@ class RefundTest {
 
     @Test
     void createRejectsNonPositiveAmount() {
-        assertThatThrownBy(() -> Refund.create(new BigDecimal("0.00"), REFUNDED_ON, null, RECORDED_AT))
+        BigDecimal amount = new BigDecimal("0.00");
+        assertThatThrownBy(() -> Refund.create(amount, REFUNDED_ON, null, RECORDED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("amount must be positive");
     }
 
     @Test
     void createRejectsAmountNeedingRounding() {
-        assertThatThrownBy(() -> Refund.create(new BigDecimal("50.001"), REFUNDED_ON, null, RECORDED_AT))
+        BigDecimal amount = new BigDecimal("50.001");
+        assertThatThrownBy(() -> Refund.create(amount, REFUNDED_ON, null, RECORDED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("amount must have at most 2 decimal places");
     }
 
     @Test
     void createRejectsNullRefundedOn() {
-        assertThatThrownBy(() -> Refund.create(new BigDecimal("50.00"), null, null, RECORDED_AT))
+        BigDecimal amount = new BigDecimal("50.00");
+        assertThatThrownBy(() -> Refund.create(amount, null, null, RECORDED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("refundedOn is required");
     }
 
     @Test
     void createRejectsNullRecordedAt() {
-        assertThatThrownBy(() -> Refund.create(new BigDecimal("50.00"), REFUNDED_ON, null, null))
+        BigDecimal amount = new BigDecimal("50.00");
+        assertThatThrownBy(() -> Refund.create(amount, REFUNDED_ON, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("recordedAt is required");
     }
@@ -72,7 +76,8 @@ class RefundTest {
     void createRejectsTooLongReference() {
         String reference = "x".repeat(256);
 
-        assertThatThrownBy(() -> Refund.create(new BigDecimal("50.00"), REFUNDED_ON, reference, RECORDED_AT))
+        BigDecimal amount = new BigDecimal("50.00");
+        assertThatThrownBy(() -> Refund.create(amount, REFUNDED_ON, reference, RECORDED_AT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("reference must be at most 255 characters");
     }

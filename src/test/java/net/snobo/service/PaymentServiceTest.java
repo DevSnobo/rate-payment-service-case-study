@@ -41,8 +41,7 @@ import net.snobo.service.exception.PaymentPlanNotFoundException;
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
 
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-03-15T10:00:00Z"),
-            ZoneId.of("Europe/Berlin"));
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-03-15T10:00:00Z"), ZoneId.of("Europe/Berlin"));
     private static final LocalDate PAID_ON = LocalDate.of(2026, 3, 14);
 
     @Mock
@@ -60,9 +59,7 @@ class PaymentServiceTest {
 
     @Test
     void recordsPartialPaymentOnOldestInstallment() {
-        Claim claim = claimWithPlan(
-                installment(1, "100.00", "2026-04-01"),
-                installment(2, "200.00", "2026-05-01"));
+        Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"), installment(2, "200.00", "2026-05-01"));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
 
         RecordPaymentResponse response = paymentService.recordPayment(4711L, payment("80.00", null));
@@ -80,18 +77,35 @@ class PaymentServiceTest {
         assertThat(response.paymentPlan().status()).isEqualTo(Status.ACTIVE);
     }
 
+    private static Claim claimWithPlan(Installment... installments) {
+        BigDecimal total = java.util.Arrays.stream(installments).map(Installment::getScheduledAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Claim claim = Claim.create(4711L, total, "Ada Lovelace", LocalDate.of(2026, 1, 15));
+        PaymentPlan plan = claim.createPaymentPlan();
+        for (Installment installment : installments) {
+            plan.addInstallment(installment);
+        }
+        plan.validateAgainstClaim();
+        return claim;
+    }
+
+    private static Installment installment(int number, String amount, String dueDate) {
+        return Installment.create(number, new BigDecimal(amount), LocalDate.parse(dueDate));
+    }
+
+    private static CreatePaymentRequest payment(String amount, String reference) {
+        return new CreatePaymentRequest(new BigDecimal(amount), PAID_ON, reference);
+    }
+
     @Test
     void spreadsPaymentAcrossInstallments() {
-        Claim claim = claimWithPlan(
-                installment(1, "100.00", "2026-04-01"),
-                installment(2, "200.00", "2026-05-01"));
+        Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"), installment(2, "200.00", "2026-05-01"));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
 
         RecordPaymentResponse response = paymentService.recordPayment(4711L, payment("150.00", null));
 
         assertThat(response.payment().allocations()).hasSize(2);
-        assertThat(response.payment().allocations())
-                .extracting(PaymentAllocationResponse::installmentNumber)
+        assertThat(response.payment().allocations()).extracting(PaymentAllocationResponse::installmentNumber)
                 .containsExactly(1, 2);
         assertThat(response.payment().allocations().get(0).amount()).isEqualByComparingTo("100.00");
         assertThat(response.payment().allocations().get(1).amount()).isEqualByComparingTo("50.00");
@@ -101,9 +115,7 @@ class PaymentServiceTest {
 
     @Test
     void recordsOverpaymentAsCredit() {
-        Claim claim = claimWithPlan(
-                installment(1, "100.00", "2026-04-01"),
-                installment(2, "200.00", "2026-05-01"));
+        Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"), installment(2, "200.00", "2026-05-01"));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
 
         RecordPaymentResponse response = paymentService.recordPayment(4711L, payment("350.00", null));
@@ -119,10 +131,8 @@ class PaymentServiceTest {
     @Test
     void acceptsPaymentOnCompletedPlanAsCredit() {
         Claim claim = claimWithPlan(
-                TestInstallments.paid(1, new BigDecimal("100.00"), new BigDecimal("100.00"),
-                        LocalDate.of(2026, 4, 1)),
-                TestInstallments.paid(2, new BigDecimal("200.00"), new BigDecimal("200.00"),
-                        LocalDate.of(2026, 5, 1)));
+                TestInstallments.paid(1, new BigDecimal("100.00"), new BigDecimal("100.00"), LocalDate.of(2026, 4, 1)),
+                TestInstallments.paid(2, new BigDecimal("200.00"), new BigDecimal("200.00"), LocalDate.of(2026, 5, 1)));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
 
         RecordPaymentResponse response = paymentService.recordPayment(4711L, payment("50.00", null));
@@ -151,10 +161,10 @@ class PaymentServiceTest {
         Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentService.recordPayment(4711L,
-                new CreatePaymentRequest(new BigDecimal("20.00"), LocalDate.of(2026, 3, 16), null)))
-                .isInstanceOf(InvalidPaymentRequestException.class)
-                .hasMessage("paidOn must not be in the future");
+        CreatePaymentRequest request =
+                new CreatePaymentRequest(new BigDecimal("20.00"), LocalDate.of(2026, 3, 16), null);
+        assertThatThrownBy(() -> paymentService.recordPayment(4711L, request)).isInstanceOf(
+                InvalidPaymentRequestException.class).hasMessage("paidOn must not be in the future");
     }
 
     @Test
@@ -162,10 +172,9 @@ class PaymentServiceTest {
         Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentService.recordPayment(4711L,
-                new CreatePaymentRequest(new BigDecimal("20.00"), null, null)))
-                .isInstanceOf(InvalidPaymentRequestException.class)
-                .hasMessage("paidOn is required");
+        CreatePaymentRequest request = new CreatePaymentRequest(new BigDecimal("20.00"), null, null);
+        assertThatThrownBy(() -> paymentService.recordPayment(4711L, request)).isInstanceOf(
+                InvalidPaymentRequestException.class).hasMessage("paidOn is required");
     }
 
     @Test
@@ -173,9 +182,9 @@ class PaymentServiceTest {
         Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment("0.00", null)))
-                .isInstanceOf(InvalidPaymentRequestException.class)
-                .hasMessage("amount must be positive");
+        CreatePaymentRequest payment = payment("0.00", null);
+        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment)).isInstanceOf(
+                InvalidPaymentRequestException.class).hasMessage("amount must be positive");
     }
 
     @Test
@@ -183,108 +192,81 @@ class PaymentServiceTest {
         Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment("20.001", null)))
-                .isInstanceOf(InvalidPaymentRequestException.class)
-                .hasMessage("amount must have at most 2 decimal places");
+        CreatePaymentRequest payment = payment("20.001", null);
+        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment)).isInstanceOf(
+                InvalidPaymentRequestException.class).hasMessage("amount must have at most 2 decimal places");
     }
 
     @Test
     void rejectsUnknownClaim() {
         given(claimRepository.findByClaimNumberForUpdate(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> paymentService.recordPayment(999L, payment("20.00", null)))
-                .isInstanceOf(ClaimNotFoundException.class)
+        CreatePaymentRequest payment = payment("20.00", null);
+        assertThatThrownBy(() -> paymentService.recordPayment(999L, payment)).isInstanceOf(ClaimNotFoundException.class)
                 .hasMessage("No claim 0000000999");
     }
 
     @Test
     void rejectsClaimWithoutPlan() {
-        Claim claim = Claim.create(4711L, new BigDecimal("100.00"), "Ada Lovelace",
-                LocalDate.of(2026, 1, 15));
+        Claim claim = Claim.create(4711L, new BigDecimal("100.00"), "Ada Lovelace", LocalDate.of(2026, 1, 15));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment("20.00", null)))
-                .isInstanceOf(PaymentPlanNotFoundException.class)
-                .hasMessage("No payment plan for claim 0000004711");
+        CreatePaymentRequest payment = payment("20.00", null);
+        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment)).isInstanceOf(
+                PaymentPlanNotFoundException.class).hasMessage("No payment plan for claim 0000004711");
     }
 
     @Test
     void rejectsInvalidClaimNumber() {
-        assertThatThrownBy(() -> paymentService.recordPayment(0L, payment("20.00", null)))
-                .isInstanceOf(InvalidClaimRequestException.class)
-                .hasMessage("claimNumber must be positive");
+        CreatePaymentRequest payment = payment("20.00", null);
+        assertThatThrownBy(() -> paymentService.recordPayment(0L, payment)).isInstanceOf(
+                InvalidClaimRequestException.class).hasMessage("claimNumber must be positive");
     }
 
     @Test
     void rejectsDuplicateReference() {
         Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
-        given(paymentRepository.existsByPaymentPlanIdAndReference(any(), eq("bank-1")))
-                .willReturn(true);
+        given(paymentRepository.existsByPaymentPlanIdAndReference(any(), eq("bank-1"))).willReturn(true);
 
-        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment("20.00", "bank-1")))
-                .isInstanceOf(DuplicatePaymentReferenceException.class)
-                .hasMessageContaining("bank-1");
+        CreatePaymentRequest payment = payment("20.00", "bank-1");
+        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment)).isInstanceOf(
+                DuplicatePaymentReferenceException.class).hasMessageContaining("bank-1");
     }
 
     @Test
     void mapsUniqueConstraintViolationToDuplicateReference() {
         Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"));
         given(claimRepository.findByClaimNumberForUpdate(4711L)).willReturn(Optional.of(claim));
-        given(paymentRepository.saveAndFlush(any(Payment.class)))
-                .willThrow(new DataIntegrityViolationException("unique constraint"));
+        given(paymentRepository.saveAndFlush(any(Payment.class))).willThrow(
+                new DataIntegrityViolationException("unique constraint"));
 
-        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment("20.00", "bank-1")))
-                .isInstanceOf(DuplicatePaymentReferenceException.class)
-                .hasMessageContaining("bank-1");
+        CreatePaymentRequest payment = payment("20.00", "bank-1");
+        assertThatThrownBy(() -> paymentService.recordPayment(4711L, payment)).isInstanceOf(
+                DuplicatePaymentReferenceException.class).hasMessageContaining("bank-1");
     }
 
     @Test
     void returnsPaymentHistory() {
         Claim claim = claimWithPlan(installment(1, "100.00", "2026-04-01"));
-        Payment payment = Payment.create(new BigDecimal("20.00"), PAID_ON, "bank-1",
-                Instant.parse("2026-03-15T10:00:00Z"));
+        Payment payment =
+                Payment.create(new BigDecimal("20.00"), PAID_ON, "bank-1", Instant.parse("2026-03-15T10:00:00Z"));
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
-        given(paymentRepository.findByPaymentPlanIdOrderByPaidOnAscIdAsc(any()))
-                .willReturn(List.of(payment));
+        given(paymentRepository.findByPaymentPlanIdOrderByPaidOnAscIdAsc(any())).willReturn(List.of(payment));
 
         var history = paymentService.getPayments(4711L);
 
         assertThat(history).hasSize(1);
-        assertThat(history.get(0).amount()).isEqualByComparingTo("20.00");
-        assertThat(history.get(0).reference()).isEqualTo("bank-1");
+        assertThat(history.getFirst().amount()).isEqualByComparingTo("20.00");
+        assertThat(history.getFirst().reference()).isEqualTo("bank-1");
     }
 
     @Test
     void historyRejectsClaimWithoutPlan() {
-        Claim claim = Claim.create(4711L, new BigDecimal("100.00"), "Ada Lovelace",
-                LocalDate.of(2026, 1, 15));
+        Claim claim = Claim.create(4711L, new BigDecimal("100.00"), "Ada Lovelace", LocalDate.of(2026, 1, 15));
         given(claimRepository.findByClaimNumber(4711L)).willReturn(Optional.of(claim));
 
-        assertThatThrownBy(() -> paymentService.getPayments(4711L))
-                .isInstanceOf(PaymentPlanNotFoundException.class)
+        assertThatThrownBy(() -> paymentService.getPayments(4711L)).isInstanceOf(PaymentPlanNotFoundException.class)
                 .hasMessage("No payment plan for claim 0000004711");
-    }
-
-    private static CreatePaymentRequest payment(String amount, String reference) {
-        return new CreatePaymentRequest(new BigDecimal(amount), PAID_ON, reference);
-    }
-
-    private static Installment installment(int number, String amount, String dueDate) {
-        return Installment.create(number, new BigDecimal(amount), LocalDate.parse(dueDate));
-    }
-
-    private static Claim claimWithPlan(Installment... installments) {
-        BigDecimal total = java.util.Arrays.stream(installments)
-                .map(Installment::getScheduledAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        Claim claim = Claim.create(4711L, total, "Ada Lovelace",
-                LocalDate.of(2026, 1, 15));
-        PaymentPlan plan = claim.createPaymentPlan();
-        for (Installment installment : installments) {
-            plan.addInstallment(installment);
-        }
-        plan.validateAgainstClaim();
-        return claim;
     }
 }

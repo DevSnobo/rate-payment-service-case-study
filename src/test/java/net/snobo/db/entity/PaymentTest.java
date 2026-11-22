@@ -31,37 +31,36 @@ class PaymentTest {
 
     @Test
     void createRejectsNullAmount() {
-        assertThatThrownBy(() -> Payment.create(null, PAID_ON, null, RECORDED_AT))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("amount is required");
+        assertThatThrownBy(() -> Payment.create(null, PAID_ON, null, RECORDED_AT)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("amount is required");
     }
 
     @Test
     void createRejectsNonPositiveAmount() {
-        assertThatThrownBy(() -> Payment.create(new BigDecimal("0.00"), PAID_ON, null, RECORDED_AT))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("amount must be positive");
+        BigDecimal amount = new BigDecimal("0.00");
+        assertThatThrownBy(() -> Payment.create(amount, PAID_ON, null, RECORDED_AT)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("amount must be positive");
     }
 
     @Test
     void createRejectsAmountNeedingRounding() {
-        assertThatThrownBy(() -> Payment.create(new BigDecimal("80.001"), PAID_ON, null, RECORDED_AT))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("amount must have at most 2 decimal places");
+        BigDecimal amount = new BigDecimal("80.001");
+        assertThatThrownBy(() -> Payment.create(amount, PAID_ON, null, RECORDED_AT)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("amount must have at most 2 decimal places");
     }
 
     @Test
     void createRejectsNullPaidOn() {
-        assertThatThrownBy(() -> Payment.create(new BigDecimal("80.00"), null, null, RECORDED_AT))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("paidOn is required");
+        BigDecimal amount = new BigDecimal("80.00");
+        assertThatThrownBy(() -> Payment.create(amount, null, null, RECORDED_AT)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("paidOn is required");
     }
 
     @Test
     void createRejectsNullRecordedAt() {
-        assertThatThrownBy(() -> Payment.create(new BigDecimal("80.00"), PAID_ON, null, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("recordedAt is required");
+        BigDecimal amount = new BigDecimal("80.00");
+        assertThatThrownBy(() -> Payment.create(amount, PAID_ON, null, null)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("recordedAt is required");
     }
 
     @Test
@@ -75,16 +74,15 @@ class PaymentTest {
     void createRejectsTooLongReference() {
         String reference = "x".repeat(256);
 
-        assertThatThrownBy(() -> Payment.create(new BigDecimal("80.00"), PAID_ON, reference, RECORDED_AT))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("reference must be at most 255 characters");
+        BigDecimal amount = new BigDecimal("80.00");
+        assertThatThrownBy(() -> Payment.create(amount, PAID_ON, reference, RECORDED_AT)).isInstanceOf(
+                IllegalArgumentException.class).hasMessage("reference must be at most 255 characters");
     }
 
     @Test
     void addAllocationTracksAllocatedAndUnallocatedAmounts() {
         Payment payment = Payment.create(new BigDecimal("80.00"), PAID_ON, null, RECORDED_AT);
-        Installment installment = Installment.create(1, new BigDecimal("100.00"),
-                LocalDate.of(2026, 4, 1));
+        Installment installment = Installment.create(1, new BigDecimal("100.00"), LocalDate.of(2026, 4, 1));
 
         payment.addAllocation(installment, new BigDecimal("30.00"));
 
@@ -122,16 +120,14 @@ class PaymentTest {
         Payment payment = Payment.create(new BigDecimal("80.00"), PAID_ON, null, RECORDED_AT);
         Refund refund = Refund.create(new BigDecimal("80.01"), REFUNDED_ON, null, RECORDED_AT);
 
-        assertThatThrownBy(() -> payment.addRefund(refund))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> payment.addRefund(refund)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("refund exceeds available credit");
     }
 
     @Test
     void allocationsAndRefundsShareTheSameCredit() {
         Payment payment = Payment.create(new BigDecimal("100.00"), PAID_ON, null, RECORDED_AT);
-        Installment installment = Installment.create(1, new BigDecimal("100.00"),
-                LocalDate.of(2026, 4, 1));
+        Installment installment = Installment.create(1, new BigDecimal("100.00"), LocalDate.of(2026, 4, 1));
         payment.addAllocation(installment, new BigDecimal("70.00"));
 
         payment.addRefund(Refund.create(new BigDecimal("20.00"), REFUNDED_ON, null, RECORDED_AT));
