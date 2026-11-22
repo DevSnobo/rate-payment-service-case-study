@@ -1,7 +1,9 @@
 package net.snobo.db.entity;
 
-import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -17,8 +19,11 @@ public class Installment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private Long installmentNumber;
-    private Double amountPaid;
-    private LocalDateTime dueDate;
+    @Column(precision = 19, scale = 2)
+    private BigDecimal amountPaid;
+    @Column(precision = 19, scale = 2)
+    private BigDecimal scheduledAmount;
+    private LocalDate dueDate;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "payment_plan_id", nullable = false)
     private PaymentPlan paymentPlan;
@@ -39,19 +44,27 @@ public class Installment {
         this.installmentNumber = installmentNumber;
     }
 
-    public Double getAmountPaid() {
+    public BigDecimal getAmountPaid() {
         return amountPaid;
     }
 
-    public void setAmountPaid(Double amountPaid) {
+    public void setAmountPaid(BigDecimal amountPaid) {
         this.amountPaid = amountPaid;
     }
 
-    public LocalDateTime getDueDate() {
+    public BigDecimal getScheduledAmount() {
+        return scheduledAmount;
+    }
+
+    public void setScheduledAmount(BigDecimal scheduledAmount) {
+        this.scheduledAmount = scheduledAmount;
+    }
+
+    public LocalDate getDueDate() {
         return dueDate;
     }
 
-    public void setDueDate(LocalDateTime dueDate) {
+    public void setDueDate(LocalDate dueDate) {
         this.dueDate = dueDate;
     }
 
