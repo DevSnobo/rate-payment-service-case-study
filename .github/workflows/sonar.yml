@@ -5,6 +5,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: sonar-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build and analyze
@@ -31,6 +38,15 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >
-          mvn -B verify sonar:sonar -Pcoverage
+          ./mvnw -B verify sonar:sonar -Pcoverage
           -Dsonar.organization=snobo
           -Dsonar.projectKey=DevSnobo_rate-payment-service-case-study
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 7.0.2
+        with:
+         name: reports
+         path: |
+           target/surefire-reports/
+           target/site/jacoco/
