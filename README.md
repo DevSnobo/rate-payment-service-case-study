@@ -337,11 +337,11 @@ src/main/java/net/snobo
 - [Documentation index](docs/README.md)
 - [Architecture](docs/architecture.md) — context, domain model, data model, transactions and assumptions.
 - [API reference](docs/api.md) — every endpoint, field and error case.
+- [Slice 00 — Build, test and CI](docs/slices/00-build-test-and-ci.md)
 - [Slice 01 — Foundation and read path](docs/slices/01-foundation-and-read-path.md)
 - [Slice 02 — Create payment plan](docs/slices/02-create-payment-plan.md)
 - [Slice 03 — Record payments](docs/slices/03-record-payments.md)
 - [Slice 04 — Refunds and credit settlement](docs/slices/04-refunds-and-credit.md)
-- [Slice 05 — Build, test and CI](docs/slices/00-build-test-and-ci.md)
 
 ## Verification
 
