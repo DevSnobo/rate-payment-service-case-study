@@ -3,7 +3,7 @@ package net.snobo.rest.dto;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record Installment(Long installmentNumber, BigDecimal amountPaid, BigDecimal scheduledAmount,
+public record Installment(int installmentNumber, BigDecimal amountPaid, BigDecimal scheduledAmount,
                           LocalDate dueDate) {
 
     public Installment(net.snobo.db.entity.Installment entity) {

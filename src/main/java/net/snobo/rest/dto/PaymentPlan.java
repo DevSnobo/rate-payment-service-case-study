@@ -5,7 +5,7 @@ import java.util.List;
 
 import net.snobo.domain.Status;
 
-public record PaymentPlan(Long claimNumber, BigDecimal totalClaimAmount, BigDecimal outstandingBalance,
-                          BigDecimal amountPaid, Status status, List<Installment> installments) {
+public record PaymentPlan(Claim claim, BigDecimal totalClaimAmount, Status status,
+                          List<Installment> installments) {
 
 }
