@@ -211,3 +211,34 @@ and now, incremental commits, with tests and error handling, go implement. give 
   is a refund/credit case.
 - Added the quote endpoint to the README as a potential feature.
 - New stacked branch `feature/create-plan`; 122 tests pass.
+
+---
+
+## 009 — Payments slice rundown
+
+```text
+now on to the next slice. give me the detailed rundown as you did before for me to review.
+```
+
+**Decisions**
+
+- Planning only; no code changes. Outlined the payment ledger, allocation rules,
+  overpayment/credit handling, API shape, locking, error cases, tests, branch plan and
+  the open decisions for the payments slice.
+
+---
+
+## 010 — Payments slice implementation
+
+```text
+decisions:
+continue with your recommendations. go
+```
+
+**Decisions**
+
+- Implemented the payment ledger, allocation rows, oldest-due-date allocation,
+  overpayment credit, payment history and `creditAmount` on the plan.
+- Payments use a pessimistic claim lock, reject future `paidOn` dates, keep an
+  optional unique reference per plan, and accept payments on completed plans as credit.
+- New stacked branch `feature/record-payments`; 175 tests pass.

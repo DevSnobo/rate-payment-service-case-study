@@ -73,15 +73,40 @@ Rules:
 - One payment plan per claim. A second create request returns 409.
 - Creation returns `201 Created` with a `Location` header and the plan body.
 
-### Payment allocation
+### Payments
 
-Not implemented yet; planned for the payment slice:
+- `POST /api/claims/{claimNumber}/payment-plan/payments` — record a payment.
+- `GET /api/claims/{claimNumber}/payment-plan/payments` — read the payment history.
 
-- Allocate payments to the oldest due date first, then by installment number.
+Request:
+
+```json
+{
+  "amount": 80.00,
+  "paidOn": "2026-12-05",
+  "reference": "bank-transfer-123"
+}
+```
+
+Rules:
+
+- `amount` is positive and scale 2.
+- `paidOn` is required and must not be in the future.
+- `reference` is optional. It is unique per plan; a duplicate returns 409.
+- Payments are allocated to the oldest due date first, then by installment number.
 - Partial payments are allowed.
-- An overpayment is spread over future unpaid installments when they exist.
-- If no future installment remains, the excess is a credit/overpayment case handled
-  by the refund rule.
+- An overpayment is spread over future unpaid installments while any exist.
+- If no future installment remains, the excess is recorded as unallocated credit on
+  the payment and as `creditAmount` on the plan.
+- A payment on a completed plan is accepted and recorded as credit.
+- `amountPaid` is the amount allocated to installments.
+- `totalReceived = amountPaid + creditAmount`.
+- A payment response contains `paymentId`, `amount`, `paidOn`, `recordedAt`,
+  `reference`, `allocatedAmount`, `unallocatedAmount` and the allocation rows.
+- Recording a payment returns `201 Created` with the payment and the updated plan.
+- Payment history is ordered by `paidOn`, then id.
+- Recording uses a pessimistic write lock per claim, so concurrent payments are
+  serialized and cannot over-allocate an installment.
 
 ## Potential features
 
@@ -89,3 +114,7 @@ Not implemented yet; planned for the payment slice:
   `POST /api/claims/{claimNumber}/payment-plan/quote`, could return the calculated
   schedule without persisting it. This would let a debtor compare a count-based and
   an amount-based offer before accepting one.
+- Refund or credit settlement for the remaining `creditAmount` after a plan is
+  completed.
+- Idempotent replay for a repeated payment `reference`.
+- Pagination for the payment history.
