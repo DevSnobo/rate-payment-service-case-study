@@ -22,6 +22,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import net.snobo.service.exception.ClaimNotFoundException;
 import net.snobo.service.exception.DuplicateClaimException;
 import net.snobo.service.exception.InvalidClaimRequestException;
+import net.snobo.service.exception.InvalidPaymentPlanRequestException;
+import net.snobo.service.exception.PaymentPlanAlreadyExistsException;
 import net.snobo.service.exception.PaymentPlanNotFoundException;
 
 @RestControllerAdvice
@@ -29,6 +31,7 @@ import net.snobo.service.exception.PaymentPlanNotFoundException;
 public class ApiExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
+    private static final String INVALID_REQUEST = "Invalid request";
 
     @ExceptionHandler(ClaimNotFoundException.class)
     public ProblemDetail handleClaimNotFound(ClaimNotFoundException exception, HttpServletRequest request) {
@@ -49,6 +52,19 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidClaimRequestException.class)
     public ProblemDetail handleInvalidClaimRequest(InvalidClaimRequestException exception,
                                                    HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, INVALID_REQUEST, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(PaymentPlanAlreadyExistsException.class)
+    public ProblemDetail handlePaymentPlanAlreadyExists(PaymentPlanAlreadyExistsException exception,
+                                                        HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "Payment plan already exists",
+                exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidPaymentPlanRequestException.class)
+    public ProblemDetail handleInvalidPaymentPlanRequest(InvalidPaymentPlanRequestException exception,
+                                                         HttpServletRequest request) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid request", exception.getMessage(), request);
     }
 
