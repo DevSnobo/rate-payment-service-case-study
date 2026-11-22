@@ -96,6 +96,13 @@ public class PaymentPlan {
         }
     }
 
+    public BigDecimal refundedAmount() {
+        return payments.stream()
+                .map(Payment::refundedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2);
+    }
+
     public BigDecimal creditBalance() {
         return payments.stream()
                 .map(Payment::unallocatedAmount)

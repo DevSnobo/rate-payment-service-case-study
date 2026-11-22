@@ -13,6 +13,7 @@ class PaymentTest {
 
     private static final Instant RECORDED_AT = Instant.parse("2026-03-15T10:00:00Z");
     private static final LocalDate PAID_ON = LocalDate.of(2026, 3, 14);
+    private static final LocalDate REFUNDED_ON = LocalDate.of(2026, 3, 20);
 
     @Test
     void createBuildsPayment() {
@@ -90,5 +91,53 @@ class PaymentTest {
         assertThat(payment.getAllocations()).hasSize(1);
         assertThat(payment.allocatedAmount()).isEqualByComparingTo("30.00");
         assertThat(payment.unallocatedAmount()).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void addRefundReducesUnallocatedAmount() {
+        Payment payment = Payment.create(new BigDecimal("80.00"), PAID_ON, null, RECORDED_AT);
+        Refund refund = Refund.create(new BigDecimal("30.00"), REFUNDED_ON, null, RECORDED_AT);
+
+        payment.addRefund(refund);
+
+        assertThat(payment.getRefunds()).hasSize(1);
+        assertThat(payment.refundedAmount()).isEqualByComparingTo("30.00");
+        assertThat(payment.unallocatedAmount()).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void addMultipleRefundsUntilCreditIsExhausted() {
+        Payment payment = Payment.create(new BigDecimal("80.00"), PAID_ON, null, RECORDED_AT);
+
+        payment.addRefund(Refund.create(new BigDecimal("30.00"), REFUNDED_ON, null, RECORDED_AT));
+        payment.addRefund(Refund.create(new BigDecimal("50.00"), REFUNDED_ON, null, RECORDED_AT));
+
+        assertThat(payment.getRefunds()).hasSize(2);
+        assertThat(payment.refundedAmount()).isEqualByComparingTo("80.00");
+        assertThat(payment.unallocatedAmount()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void addRefundRejectsMoreThanAvailableCredit() {
+        Payment payment = Payment.create(new BigDecimal("80.00"), PAID_ON, null, RECORDED_AT);
+        Refund refund = Refund.create(new BigDecimal("80.01"), REFUNDED_ON, null, RECORDED_AT);
+
+        assertThatThrownBy(() -> payment.addRefund(refund))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("refund exceeds available credit");
+    }
+
+    @Test
+    void allocationsAndRefundsShareTheSameCredit() {
+        Payment payment = Payment.create(new BigDecimal("100.00"), PAID_ON, null, RECORDED_AT);
+        Installment installment = Installment.create(1, new BigDecimal("100.00"),
+                LocalDate.of(2026, 4, 1));
+        payment.addAllocation(installment, new BigDecimal("70.00"));
+
+        payment.addRefund(Refund.create(new BigDecimal("20.00"), REFUNDED_ON, null, RECORDED_AT));
+
+        assertThat(payment.allocatedAmount()).isEqualByComparingTo("70.00");
+        assertThat(payment.refundedAmount()).isEqualByComparingTo("20.00");
+        assertThat(payment.unallocatedAmount()).isEqualByComparingTo("10.00");
     }
 }
