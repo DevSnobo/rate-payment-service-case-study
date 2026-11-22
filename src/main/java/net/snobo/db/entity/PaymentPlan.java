@@ -1,4 +1,4 @@
-package net.snobo.entity;
+package net.snobo.db.entity;
 
 import java.util.List;
 
@@ -10,7 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
-import net.snobo.rest.dto.Status;
+import net.snobo.domain.Status;
 
 @Entity
 @Table(name = "payment_plans")

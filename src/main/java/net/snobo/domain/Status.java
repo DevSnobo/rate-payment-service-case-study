@@ -1,4 +1,4 @@
-package net.snobo.rest.dto;
+package net.snobo.domain;
 
 public enum Status {
     ACTIVE,

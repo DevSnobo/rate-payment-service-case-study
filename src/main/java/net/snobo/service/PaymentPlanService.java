@@ -4,7 +4,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import net.snobo.repository.PaymentPlanRepository;
+import net.snobo.db.repository.PaymentPlanRepository;
 import net.snobo.rest.dto.Installment;
 import net.snobo.rest.dto.PaymentPlan;
 
@@ -19,7 +19,7 @@ public class PaymentPlanService {
 
     @Transactional
     public PaymentPlan getPaymentPlan(Long id) {
-        Optional<net.snobo.entity.PaymentPlan> entityOptional = repository.findById(id);
+        Optional<net.snobo.db.entity.PaymentPlan> entityOptional = repository.findById(id);
         if (entityOptional.isPresent()) {
             var entity = entityOptional.get();
             return new PaymentPlan(entity.getClaimNumber(), entity.getTotalClaimAmount(),

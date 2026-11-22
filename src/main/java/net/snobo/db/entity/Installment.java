@@ -1,4 +1,4 @@
-package net.snobo.entity;
+package net.snobo.db.entity;
 
 import java.time.LocalDateTime;
 
