@@ -1,115 +1,123 @@
 package net.snobo.db.entity;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.OrderBy;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 
 import net.snobo.domain.Status;
 
 @Entity
-@Table(name = "payment_plans", uniqueConstraints = @UniqueConstraint(columnNames = "claim_number"))
+@Table(name = "payment_plans")
 public class PaymentPlan {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long claimNumber;
 
-    @Column(precision = 19, scale = 2)
-    private BigDecimal totalClaimAmount;
+    @OneToOne(mappedBy = "paymentPlan", fetch = FetchType.LAZY)
+    private Claim claim;
 
-    @Column(precision = 19, scale = 2)
-    private BigDecimal outstandingBalance;
-
-    @Column(precision = 19, scale = 2)
-    private BigDecimal amountPaid;
-    @Enumerated(EnumType.STRING)
-    private Status status;
     @OneToMany(mappedBy = "paymentPlan", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("installmentNumber ASC")
-    private List<Installment> installments;
+    private final List<Installment> installments = new ArrayList<>();
 
-    @PrePersist
-    @PreUpdate
-    public void currencyPrecisionConversion() {
-        totalClaimAmount = totalClaimAmount.setScale(2, RoundingMode.HALF_UP);
-        outstandingBalance = outstandingBalance.setScale(2, RoundingMode.HALF_UP);
-        amountPaid = amountPaid.setScale(2, RoundingMode.HALF_UP);
+    protected PaymentPlan() {
     }
 
     public void addInstallment(Installment installment) {
+        if (installment == null) {
+            throw new IllegalArgumentException("installment is required");
+        }
         this.installments.add(installment);
         installment.setPaymentPlan(this);
+    }
+
+    public void validateAgainstClaim() {
+        if (claim == null) {
+            throw new IllegalStateException("payment plan is not attached to a claim");
+        }
+        if (installments.isEmpty()) {
+            throw new IllegalStateException("payment plan must have at least one installment");
+        }
+        BigDecimal scheduledTotal = installments.stream()
+                .map(Installment::getScheduledAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (scheduledTotal.compareTo(claim.getTotalAmount()) != 0) {
+            throw new IllegalStateException("installments total " + scheduledTotal
+                    + " does not match claim total " + claim.getTotalAmount());
+        }
+        Set<Integer> numbers = new HashSet<>();
+        for (Installment installment : installments) {
+            if (!numbers.add(installment.getInstallmentNumber())) {
+                throw new IllegalStateException("duplicate installment number "
+                        + installment.getInstallmentNumber());
+            }
+        }
+    }
+
+    public BigDecimal amountPaid() {
+        return installments.stream()
+                .map(Installment::getAmountPaid)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2);
+    }
+
+    public BigDecimal outstandingBalance() {
+        return installments.stream()
+                .map(Installment::outstandingAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2);
+    }
+
+    public Status statusAt(Clock clock) {
+        if (clock == null) {
+            throw new IllegalArgumentException("clock is required");
+        }
+        if (claim == null) {
+            throw new IllegalStateException("payment plan is not attached to a claim");
+        }
+        if (installments.isEmpty()) {
+            throw new IllegalStateException("payment plan must have at least one installment");
+        }
+        if (outstandingBalance().signum() == 0) {
+            return Status.COMPLETED;
+        }
+        LocalDate today = LocalDate.now(clock);
+        boolean overdue = installments.stream()
+                .filter(installment -> installment.outstandingAmount().signum() > 0)
+                .anyMatch(installment -> installment.getDueDate().isBefore(today));
+        return overdue ? Status.OVERDUE : Status.ACTIVE;
     }
 
     public Long getId() {
         return id;
     }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Long getClaimNumber() {
-        return claimNumber;
-    }
-
-    public void setClaimNumber(Long claimNumber) {
-        this.claimNumber = claimNumber;
-    }
-
-    public BigDecimal getTotalClaimAmount() {
-        return totalClaimAmount;
-    }
-
-    public void setTotalClaimAmount(BigDecimal totalClaimAmount) {
-        this.totalClaimAmount = totalClaimAmount;
-    }
-
-    public BigDecimal getOutstandingBalance() {
-        return outstandingBalance;
-    }
-
-    public void setOutstandingBalance(BigDecimal outstandingBalance) {
-        this.outstandingBalance = outstandingBalance;
-    }
-
-    public BigDecimal getAmountPaid() {
-        return amountPaid;
-    }
-
-    public void setAmountPaid(BigDecimal amountPaid) {
-        this.amountPaid = amountPaid;
-    }
-
-    public Status getStatus() {
-        return status;
-    }
-
-    public void setStatus(Status status) {
-        this.status = status;
+    public Claim getClaim() {
+        return claim;
     }
 
     public List<Installment> getInstallments() {
-        return installments;
+        return Collections.unmodifiableList(installments);
     }
 
-    public void setInstallments(List<Installment> installments) {
-        this.installments = installments;
+    void setClaim(Claim claim) {
+        this.claim = claim;
     }
 }
