@@ -35,3 +35,14 @@ Created `AGENTS.md` with the project rules and this prompt log. No other files w
 
 - Each entry holds the prompt verbatim plus a brief decisions/outcome note.
 - No dates in new entries; entry 001 is left unchanged.
+
+## 003 — Critique of the first service-to-db slice
+
+```text
+I implemented the first service to db slice. give me an honest critique. test setup is currently missing, as i'm not yet familiar enough with Spring's ways for testing the different layers best. give me suggestions for improvements
+```
+
+**Decisions**
+
+- Reviewed the slice against the requirements; ran the build/tests and the app, and verified two blocking defects in a throwaway copy under `/tmp`.
+- Reported findings and a layered test strategy. No source files were changed; only this prompt was appended.

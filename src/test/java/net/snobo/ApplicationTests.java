@@ -1,10 +1,10 @@
-package net.snobo.rate_payment_service;
+package net.snobo;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class RatePaymentServiceApplicationTests {
+class ApplicationTests {
 
 	@Test
 	void contextLoads() {
