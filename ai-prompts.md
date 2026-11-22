@@ -272,3 +272,42 @@ i agree with your suggestions. go
 - Refunds use the same pessimistic claim lock, reject future dates and over-refunds,
   and keep completed plans completed.
 - New stacked branch `feature/refunds`; 220 tests pass.
+
+---
+
+## 013 — CI review
+
+```text
+in the meantime i created a verification CI running clean verify. any improvements you would suggest?
+```
+
+**Decisions**
+
+- Review only; no CI changes. Ran `./mvnw -B -ntp clean verify -Pcoverage`
+  successfully (220 tests) and suggested wrapper/coverage, artifact upload,
+  permissions/concurrency, single-workflow consolidation, Sonar quality-gate wait,
+  version enforcement, and keeping action versions current.
+
+---
+
+## 014 — Documentation from session history
+
+```text
+I want you to parse through the past few sessions that happened in this repository and collect all the different assumptions, rules and usage instructions that landed in the final implementation and draft it into docs/ files that give a nice overview on the project, maybe separated by implementation slice?
+restructure the readme accordingly and link to the new locations of the info. make the readme a document how real projects use it.
+```
+
+**Decisions**
+
+- Read the three earlier sessions in this repository and the final source, then
+  documented the rules that actually landed: claim model, money and time rules,
+  computed status, create-plan modes, allocation and credit, refunds, locking,
+  error contract, test layers and CI.
+- Added `docs/README.md`, `docs/architecture.md`, `docs/api.md` and one page per
+  implementation slice.
+- Rewrote `README.md` as an integration guide with a runnable claim-to-refund flow,
+  the rules that affect clients, configuration and a production adoption checklist.
+- No production source or tests changed. Verified `./mvnw -B -ntp clean verify
+  -Pcoverage`: 220 tests, 92.2% line coverage, 82.4% branch coverage.
+- `docs/decisions.md` and `docs/test-checklist.md` are covered by the `.gitignore`
+  "Temporary markdowns" block, so the README links only to the new docs.
