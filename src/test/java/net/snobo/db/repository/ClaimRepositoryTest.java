@@ -53,6 +53,23 @@ class ClaimRepositoryTest {
     }
 
     @Test
+    void findByClaimNumberForUpdateReturnsClaimWithPlan() {
+        Claim claim = Claim.create(4711L, new BigDecimal("300.00"), "Ada Lovelace",
+                LocalDate.of(2026, 1, 15));
+        PaymentPlan plan = claim.createPaymentPlan();
+        plan.addInstallment(Installment.create(1, new BigDecimal("100.00"), LocalDate.of(2026, 2, 1)));
+        plan.addInstallment(Installment.create(2, new BigDecimal("200.00"), LocalDate.of(2026, 3, 1)));
+        claims.saveAndFlush(claim);
+        em.clear();
+
+        Claim locked = claims.findByClaimNumberForUpdate(4711L).orElseThrow();
+
+        assertThat(locked.getClaimNumber()).isEqualTo(4711L);
+        assertThat(locked.getPaymentPlan()).isNotNull();
+        assertThat(locked.getPaymentPlan().getInstallments()).hasSize(2);
+    }
+
+    @Test
     void findByClaimNumberFetchesPlanAndInstallments() {
         Claim claim = Claim.create(4711L, new BigDecimal("300.00"), "Ada Lovelace",
                 LocalDate.of(2026, 1, 15));

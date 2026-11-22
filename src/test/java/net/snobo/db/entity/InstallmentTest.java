@@ -74,4 +74,34 @@ class InstallmentTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("amountPaid must not exceed scheduledAmount");
     }
+
+    @Test
+    void applyAllocationIncreasesPaidAmount() {
+        Installment installment = Installment.create(1, new BigDecimal("100.00"), DUE_DATE);
+
+        installment.applyAllocation(new BigDecimal("40.00"));
+
+        assertThat(installment.getAmountPaid()).isEqualByComparingTo("40.00");
+        assertThat(installment.outstandingAmount()).isEqualByComparingTo("60.00");
+    }
+
+    @Test
+    void applyAllocationRejectsOverpayment() {
+        Installment installment = Installment.create(1, new BigDecimal("100.00"), DUE_DATE);
+
+        BigDecimal allocationAmount = new BigDecimal("100.01");
+        assertThatThrownBy(() -> installment.applyAllocation(allocationAmount))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("allocation exceeds outstanding amount");
+    }
+
+    @Test
+    void applyAllocationRejectsNonPositiveAmount() {
+        Installment installment = Installment.create(1, new BigDecimal("100.00"), DUE_DATE);
+
+        BigDecimal allocationAmount = new BigDecimal("0.00");
+        assertThatThrownBy(() -> installment.applyAllocation(allocationAmount))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("allocationAmount must be positive");
+    }
 }

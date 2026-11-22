@@ -68,6 +68,15 @@ public class Installment {
         return scheduledAmount.subtract(amountPaid);
     }
 
+    public void applyAllocation(BigDecimal allocationAmount) {
+        BigDecimal value = Money.requirePositive(allocationAmount, "allocationAmount");
+        BigDecimal newAmountPaid = amountPaid.add(value);
+        if (newAmountPaid.compareTo(scheduledAmount) > 0) {
+            throw new IllegalArgumentException("allocation exceeds outstanding amount");
+        }
+        this.amountPaid = Money.requireNonNegative(newAmountPaid, "amountPaid");
+    }
+
     public Long getId() {
         return id;
     }

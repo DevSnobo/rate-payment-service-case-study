@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -37,6 +38,10 @@ public class PaymentPlan {
     @OrderBy("installmentNumber ASC")
     private final List<Installment> installments = new ArrayList<>();
 
+    @OneToMany(mappedBy = "paymentPlan", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("paidOn ASC, id ASC")
+    private final List<Payment> payments = new ArrayList<>();
+
     protected PaymentPlan() {
     }
 
@@ -46,6 +51,56 @@ public class PaymentPlan {
         }
         this.installments.add(installment);
         installment.setPaymentPlan(this);
+    }
+
+    public void addPayment(Payment payment) {
+        if (payment == null) {
+            throw new IllegalArgumentException("payment is required");
+        }
+        if (payment.getPaymentPlan() != null && payment.getPaymentPlan() != this) {
+            throw new IllegalStateException("payment belongs to another plan");
+        }
+        this.payments.add(payment);
+        payment.setPaymentPlan(this);
+    }
+
+    public void allocate(Payment payment) {
+        if (payment == null) {
+            throw new IllegalArgumentException("payment is required");
+        }
+        if (payment.getPaymentPlan() != this) {
+            throw new IllegalStateException("payment is not attached to this plan");
+        }
+        if (installments.isEmpty()) {
+            throw new IllegalStateException("payment plan must have at least one installment");
+        }
+
+        BigDecimal remaining = payment.getAmount();
+        List<Installment> allocationOrder = installments.stream()
+                .sorted(Comparator.comparing(Installment::getDueDate)
+                        .thenComparingInt(Installment::getInstallmentNumber))
+                .toList();
+
+        for (Installment installment : allocationOrder) {
+            if (remaining.signum() == 0) {
+                break;
+            }
+            BigDecimal outstanding = installment.outstandingAmount();
+            if (outstanding.signum() <= 0) {
+                continue;
+            }
+            BigDecimal allocationAmount = remaining.min(outstanding);
+            installment.applyAllocation(allocationAmount);
+            payment.addAllocation(installment, allocationAmount);
+            remaining = remaining.subtract(allocationAmount);
+        }
+    }
+
+    public BigDecimal creditBalance() {
+        return payments.stream()
+                .map(Payment::unallocatedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2);
     }
 
     public void validateAgainstClaim() {
@@ -115,6 +170,10 @@ public class PaymentPlan {
 
     public List<Installment> getInstallments() {
         return Collections.unmodifiableList(installments);
+    }
+
+    public List<Payment> getPayments() {
+        return Collections.unmodifiableList(payments);
     }
 
     void setClaim(Claim claim) {
