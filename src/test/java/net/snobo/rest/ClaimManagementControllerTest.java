@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -28,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import net.snobo.domain.Status;
 import net.snobo.rest.dto.ClaimResponse;
 import net.snobo.rest.dto.CreateClaimRequest;
+import net.snobo.rest.dto.CreatePaymentPlanRequest;
 import net.snobo.rest.dto.InstallmentResponse;
 import net.snobo.rest.dto.PaymentPlanResponse;
 import net.snobo.service.ClaimService;
@@ -35,6 +38,8 @@ import net.snobo.service.PaymentPlanService;
 import net.snobo.service.exception.ClaimNotFoundException;
 import net.snobo.service.exception.DuplicateClaimException;
 import net.snobo.service.exception.InvalidClaimRequestException;
+import net.snobo.service.exception.InvalidPaymentPlanRequestException;
+import net.snobo.service.exception.PaymentPlanAlreadyExistsException;
 import net.snobo.service.exception.PaymentPlanNotFoundException;
 
 @WebMvcTest(controllers = ClaimManagementController.class)
@@ -43,6 +48,7 @@ class ClaimManagementControllerTest {
     private static final String VALID_CLAIM_JSON = """
             {"claimNumber":4711,"totalAmount":300.00,"debtorName":"Ada Lovelace","createdOn":"2026-01-15"}
             """;
+    private static final String INVALID_REQUEST = "Invalid request";
 
     @MockitoBean
     private ClaimService claimService;
@@ -231,6 +237,113 @@ class ClaimManagementControllerTest {
     }
 
     @Test
+    void createsPaymentPlanFromCount() throws Exception {
+        given(paymentPlanService.createPaymentPlan(anyLong(), any(CreatePaymentPlanRequest.class)))
+                .willReturn(paymentPlanResponse());
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"installmentCount":9,"firstDueDate":"2026-12-01"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/api/claims/0000004711/payment-plan"))
+                .andExpect(jsonPath("$.claimNumber").value("0000004711"))
+                .andExpect(jsonPath("$.totalClaimAmount").value(500.00))
+                .andExpect(jsonPath("$.amountPaid").value(0.00))
+                .andExpect(jsonPath("$.outstandingBalance").value(500.00))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.installments.length()").value(2));
+
+        ArgumentCaptor<CreatePaymentPlanRequest> captor =
+                ArgumentCaptor.forClass(CreatePaymentPlanRequest.class);
+        verify(paymentPlanService).createPaymentPlan(eq(4711L), captor.capture());
+        assertThat(captor.getValue().installmentCount()).isEqualTo(9);
+        assertThat(captor.getValue().installmentAmount()).isNull();
+        assertThat(captor.getValue().firstDueDate()).isEqualTo(LocalDate.of(2026, 12, 1));
+    }
+
+    @Test
+    void createsPaymentPlanFromAmount() throws Exception {
+        given(paymentPlanService.createPaymentPlan(anyLong(), any(CreatePaymentPlanRequest.class)))
+                .willReturn(paymentPlanResponse());
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"installmentAmount":80.00,"firstDueDate":"2026-12-01"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/api/claims/0000004711/payment-plan"))
+                .andExpect(jsonPath("$.installments.length()").value(2));
+
+        ArgumentCaptor<CreatePaymentPlanRequest> captor =
+                ArgumentCaptor.forClass(CreatePaymentPlanRequest.class);
+        verify(paymentPlanService).createPaymentPlan(eq(4711L), captor.capture());
+        assertThat(captor.getValue().installmentCount()).isNull();
+        assertThat(captor.getValue().installmentAmount()).isEqualByComparingTo("80.00");
+    }
+
+    @Test
+    void returnsNotFoundWhenCreatingPlanForUnknownClaim() throws Exception {
+        given(paymentPlanService.createPaymentPlan(anyLong(), any(CreatePaymentPlanRequest.class)))
+                .willThrow(new ClaimNotFoundException(4711L));
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"installmentCount\":9}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Claim not found"))
+                .andExpect(jsonPath("$.detail").value("No claim 0000004711"));
+    }
+
+    @Test
+    void returnsConflictWhenPlanAlreadyExists() throws Exception {
+        given(paymentPlanService.createPaymentPlan(anyLong(), any(CreatePaymentPlanRequest.class)))
+                .willThrow(new PaymentPlanAlreadyExistsException(4711L));
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"installmentCount\":9}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Payment plan already exists"))
+                .andExpect(jsonPath("$.detail").value("Payment plan already exists for claim 0000004711"));
+    }
+
+    @Test
+    void returnsBadRequestForInvalidPaymentPlanFields() throws Exception {
+        given(paymentPlanService.createPaymentPlan(anyLong(), any(CreatePaymentPlanRequest.class)))
+                .willThrow(new InvalidPaymentPlanRequestException(
+                        "installmentCount must be between 1 and 120"));
+
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"installmentCount\":121}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(jsonPath("$.detail").value("installmentCount must be between 1 and 120"));
+    }
+
+    @Test
+    void returnsBadRequestForMalformedPaymentPlanJson() throws Exception {
+        mockMvc.perform(post("/api/claims/0000004711/payment-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"installmentCount\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Malformed request body"));
+    }
+
+    @Test
+    void returnsBadRequestForMalformedClaimNumberOnCreatePlan() throws Exception {
+        mockMvc.perform(post("/api/claims/abc/payment-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"installmentCount\":9}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid request"))
+                .andExpect(jsonPath("$.detail").value("claimNumber must be a valid number"));
+    }
+
+    @Test
     void hidesUnexpectedErrorMessage() throws Exception {
         given(claimService.createClaim(any(CreateClaimRequest.class)))
                 .willThrow(new RuntimeException("secret"));
@@ -243,5 +356,15 @@ class ClaimManagementControllerTest {
                 .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.detail").value("An unexpected error occurred"))
                 .andExpect(content().string(not(containsString("secret"))));
+    }
+
+    private static PaymentPlanResponse paymentPlanResponse() {
+        return new PaymentPlanResponse("0000004711", new BigDecimal("500.00"),
+                new BigDecimal("0.00"), new BigDecimal("500.00"), Status.ACTIVE,
+                List.of(
+                        new InstallmentResponse(1, new BigDecimal("250.00"), new BigDecimal("0.00"),
+                                LocalDate.of(2026, 12, 1)),
+                        new InstallmentResponse(2, new BigDecimal("250.00"), new BigDecimal("0.00"),
+                                LocalDate.of(2027, 1, 1))));
     }
 }
