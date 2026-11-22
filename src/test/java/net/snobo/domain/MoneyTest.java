@@ -17,7 +17,8 @@ class MoneyTest {
 
     @Test
     void rejectsValuesThatNeedRounding() {
-        assertThatThrownBy(() -> Money.normalize(new BigDecimal("100.005"), "amount"))
+        BigDecimal amount = new BigDecimal("100.005");
+        assertThatThrownBy(() -> Money.normalize(amount, "amount"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -31,13 +32,15 @@ class MoneyTest {
     void requirePositiveRejectsZeroAndNegativeValues() {
         assertThatThrownBy(() -> Money.requirePositive(BigDecimal.ZERO, "amount"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> Money.requirePositive(new BigDecimal("-0.01"), "amount"))
+        BigDecimal amount = new BigDecimal("-0.01");
+        assertThatThrownBy(() -> Money.requirePositive(amount, "amount"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void requireNonNegativeRejectsNegativeValues() {
-        assertThatThrownBy(() -> Money.requireNonNegative(new BigDecimal("-0.01"), "amount"))
+        BigDecimal amount = new BigDecimal("-0.01");
+        assertThatThrownBy(() -> Money.requireNonNegative(amount, "amount"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

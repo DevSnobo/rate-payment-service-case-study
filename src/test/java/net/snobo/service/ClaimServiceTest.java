@@ -63,7 +63,8 @@ class ClaimServiceTest {
     void rejectsDuplicateClaimNumber() {
         given(claimRepository.existsByClaimNumber(4711L)).willReturn(true);
 
-        assertThatThrownBy(() -> claimService.createClaim(validRequest()))
+        CreateClaimRequest request = validRequest();
+        assertThatThrownBy(() -> claimService.createClaim(request))
                 .isInstanceOf(DuplicateClaimException.class)
                 .hasMessageContaining("0000004711");
     }
@@ -74,7 +75,8 @@ class ClaimServiceTest {
         given(claimRepository.saveAndFlush(any(Claim.class)))
                 .willThrow(new DataIntegrityViolationException("unique constraint"));
 
-        assertThatThrownBy(() -> claimService.createClaim(validRequest()))
+        CreateClaimRequest request = validRequest();
+        assertThatThrownBy(() -> claimService.createClaim(request))
                 .isInstanceOf(DuplicateClaimException.class)
                 .hasMessageContaining("0000004711");
     }

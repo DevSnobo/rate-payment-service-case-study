@@ -86,17 +86,20 @@ class ClaimMappingTest {
 
     @Test
     void rejectsNegativeTotalAtDatabaseLevel() {
+        BigDecimal bigDecimal = new BigDecimal("-1.00");
+        Date date = Date.valueOf(LocalDate.of(2026, 1, 1));
         assertThatThrownBy(() -> jdbcTemplate.update(
-                "insert into claims (claim_number, total_amount, debtor_name, created_on) values (?, ?, ?, ?)",
-                9001L, new BigDecimal("-1.00"), "Ada", Date.valueOf(LocalDate.of(2026, 1, 1))))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                "insert into claims (claim_number, total_amount, debtor_name, created_on) values (?, ?, ?, ?)", 9001L,
+                bigDecimal, "Ada", date)).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void rejectsNullRequiredColumnAtDatabaseLevel() {
+        BigDecimal bigDecimal = new BigDecimal("10.00");
+        Date date = Date.valueOf(LocalDate.of(2026, 1, 1));
         assertThatThrownBy(() -> jdbcTemplate.update(
                 "insert into claims (claim_number, total_amount, debtor_name, created_on) values (?, ?, ?, ?)",
-                9002L, new BigDecimal("10.00"), (Object) null, Date.valueOf(LocalDate.of(2026, 1, 1))))
+                9002L, bigDecimal, null, date))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 

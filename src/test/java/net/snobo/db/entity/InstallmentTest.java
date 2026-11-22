@@ -25,21 +25,24 @@ class InstallmentTest {
 
     @Test
     void createRejectsNonPositiveInstallmentNumber() {
-        assertThatThrownBy(() -> Installment.create(0, new BigDecimal("100.00"), DUE_DATE))
+        BigDecimal scheduledAmount = new BigDecimal("100.00");
+        assertThatThrownBy(() -> Installment.create(0, scheduledAmount, DUE_DATE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("installmentNumber must be positive");
     }
 
     @Test
     void createRejectsNonPositiveScheduledAmount() {
-        assertThatThrownBy(() -> Installment.create(1, new BigDecimal("0.00"), DUE_DATE))
+        BigDecimal scheduledAmount = new BigDecimal("0.00");
+        assertThatThrownBy(() -> Installment.create(1, scheduledAmount, DUE_DATE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("scheduledAmount must be positive");
     }
 
     @Test
     void createRejectsNullDueDate() {
-        assertThatThrownBy(() -> Installment.create(1, new BigDecimal("100.00"), null))
+        BigDecimal scheduledAmount = new BigDecimal("100.00");
+        assertThatThrownBy(() -> Installment.create(1, scheduledAmount, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("dueDate is required");
     }
@@ -56,7 +59,8 @@ class InstallmentTest {
     void setAmountPaidRejectsNegativeAmount() {
         Installment installment = Installment.create(1, new BigDecimal("100.00"), DUE_DATE);
 
-        assertThatThrownBy(() -> installment.setAmountPaid(new BigDecimal("-1.00")))
+        BigDecimal amountPaid = new BigDecimal("-1.00");
+        assertThatThrownBy(() -> installment.setAmountPaid(amountPaid))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("amountPaid must not be negative");
     }
@@ -65,7 +69,8 @@ class InstallmentTest {
     void setAmountPaidRejectsOverpayment() {
         Installment installment = Installment.create(1, new BigDecimal("100.00"), DUE_DATE);
 
-        assertThatThrownBy(() -> installment.setAmountPaid(new BigDecimal("100.01")))
+        BigDecimal amountPaid = new BigDecimal("100.01");
+        assertThatThrownBy(() -> installment.setAmountPaid(amountPaid))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("amountPaid must not exceed scheduledAmount");
     }
