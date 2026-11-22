@@ -31,6 +31,6 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >
-          mvn -B verify sonar:sonar -Pcoverage
+          ./mvnw -B verify sonar:sonar -Pcoverage
           -Dsonar.organization=snobo
           -Dsonar.projectKey=DevSnobo_rate-payment-service-case-study
