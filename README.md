@@ -100,13 +100,47 @@ Rules:
   the payment and as `creditAmount` on the plan.
 - A payment on a completed plan is accepted and recorded as credit.
 - `amountPaid` is the amount allocated to installments.
-- `totalReceived = amountPaid + creditAmount`.
+- `creditAmount` is the remaining unallocated credit after refunds.
+- `refundedAmount` is the amount already returned to the debtor.
+- `grossReceived = amountPaid + creditAmount + refundedAmount`.
+- `currentlyHeld = amountPaid + creditAmount`.
 - A payment response contains `paymentId`, `amount`, `paidOn`, `recordedAt`,
-  `reference`, `allocatedAmount`, `unallocatedAmount` and the allocation rows.
+  `reference`, `allocatedAmount`, `refundedAmount`, `unallocatedAmount`, the
+  allocation rows and the refunds.
 - Recording a payment returns `201 Created` with the payment and the updated plan.
 - Payment history is ordered by `paidOn`, then id.
 - Recording uses a pessimistic write lock per claim, so concurrent payments are
   serialized and cannot over-allocate an installment.
+
+### Refunds
+
+- `POST /api/claims/{claimNumber}/payment-plan/payments/{paymentId}/refunds` —
+  refund part or all of a payment's unallocated credit.
+- `GET /api/claims/{claimNumber}/payment-plan/refunds` — read the refund history.
+
+Request:
+
+```json
+{
+  "amount": 20.00,
+  "refundedOn": "2026-03-20",
+  "reference": "refund-123"
+}
+```
+
+Rules:
+
+- A refund can only use unallocated credit from the selected payment.
+- Partial refunds and several refunds per payment are allowed.
+- The amount must not exceed the payment's remaining `unallocatedAmount`.
+- A refund does not change installment paid amounts or the outstanding balance.
+- A refund does not reopen a completed plan.
+- `refundedOn` is required and must not be in the future.
+- `reference` is optional and unique per payment; a duplicate returns 409.
+- Refunding more than the available credit returns 409.
+- Recording uses the same pessimistic claim lock as payments, so concurrent refunds
+  cannot spend the same credit twice.
+- The response contains the refund, the updated payment and the updated plan.
 
 ## Potential features
 
@@ -114,7 +148,7 @@ Rules:
   `POST /api/claims/{claimNumber}/payment-plan/quote`, could return the calculated
   schedule without persisting it. This would let a debtor compare a count-based and
   an amount-based offer before accepting one.
-- Refund or credit settlement for the remaining `creditAmount` after a plan is
-  completed.
-- Idempotent replay for a repeated payment `reference`.
-- Pagination for the payment history.
+- Reversal or chargeback of an allocated payment. This is different from a credit
+  refund because it would reopen the plan.
+- Idempotent replay for a repeated payment or refund `reference`.
+- Pagination for payment and refund history.
